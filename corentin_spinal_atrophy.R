@@ -4,7 +4,7 @@ library(FSA)
 options(scipen = 999)
 
 
-# COmpare the 3 groups -----------------
+# Compare the 3 groups -----------------
 
 corentin_inputs <- fread("corentin_inputs.txt")
 
