@@ -169,6 +169,34 @@ cor_matrix <- data.frame(cor_matrix)
 fwrite(cor_matrix, "cor_matrix_raw_imp.csv")
 
 
+df_plot <- df_target_vars %>% mutate(Set="Raw") %>%
+  bind_rows(df_target_vars_imputed %>% mutate(Set="Imputed")) 
+
+
+
+
+# Function to create density plots for each feature
+
+create_density_plot <- function(feature_name) {
+  ggplot(df_plot, aes(x = !!sym(feature_name), colour=Set, fill=Set )) +
+    geom_density(alpha = 0.5) +
+    ggpubr::theme_pubclean() +
+    scale_fill_manual(values = c("#183555", "#FAC67A")) +
+    scale_colour_manual(values = c("#183555", "#FAC67A")) +
+    labs(y = "Patient density", title = feature_name)
+}
+
+
+names(df_plot)
+
+# Generate density plots for all columns except Set
+feature_names <- colnames(df_plot)[-28]  # Exclude Set
+
+plots <- map(feature_names, create_density_plot)
+
+
+
+
 
 
 
@@ -232,6 +260,19 @@ summary_table %>%
 
 
 
+
+cor_matrix <- cor(df_target_vars %>% select(where(is.numeric)), method = "spearman", use = "complete.obs")
+print(cor_matrix)
+
+cor_matrix <- data.frame(cor_matrix)
+
+fwrite(cor_matrix, "cor_matrix_raw.csv")
+
+
+
+
+
+
 df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite) %>%
   bind_cols(df_target_vars_imputed)
 
@@ -281,6 +322,48 @@ summary_table %>%
   select(Variable, mean, median)
 
 
+
+cor_matrix <- cor(df_target_vars_imputed %>% select(where(is.numeric)), method = "spearman", use = "complete.obs")
+print(cor_matrix)
+
+cor_matrix <- data.frame(cor_matrix)
+
+fwrite(cor_matrix, "cor_matrix_raw_imp.csv")
+
+
+
+
+df_plot <- df_target_vars %>% mutate(Set="Raw") %>%
+  bind_rows(df_target_vars_imputed %>% mutate(Set="Imputed")) 
+
+
+
+
+# Function to create density plots for each feature
+
+create_density_plot <- function(feature_name) {
+  ggplot(df_plot, aes(x = !!sym(feature_name), colour=Set, fill=Set )) +
+    geom_density(alpha = 0.5) +
+    ggpubr::theme_pubclean() +
+    scale_fill_manual(values = c("#183555", "#FAC67A")) +
+    scale_colour_manual(values = c("#183555", "#FAC67A")) +
+    labs(y = "Patient density", title = feature_name)
+}
+
+
+names(df_plot)
+
+# Generate density plots for all columns except Set
+feature_names <- colnames(df_plot)[-28]  # Exclude Set
+
+plots <- map(feature_names, create_density_plot)
+
+
+
+
+
+fwrite(df_target_vars, "../data/df_target_vars_first.txt")
+fwrite(df_target_vars_imputed, "../data/df_target_vars_imputed_first.txt")
 
 
 
