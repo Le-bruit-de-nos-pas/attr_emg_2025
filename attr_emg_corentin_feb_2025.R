@@ -367,4 +367,115 @@ fwrite(df_target_vars_imputed, "../data/df_target_vars_imputed_first.txt")
 
 
 
+
+
+
+
+
+
+# Function to create correlation plots for each feature all visits NISLL
+
+df_target_vars <- fread("../data/df_target_vars.txt")
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+
+df_plot <- df_target_vars %>% mutate(Set="Raw") %>%
+  bind_rows(df_target_vars_imputed %>% mutate(Set="Imputed")) 
+
+
+create_density_plot <- function(feature_name) {
+  ggplot(df_plot, aes(x = !!sym(feature_name), y=NISLL, colour=Set, fill=Set )) +
+    geom_jitter(alpha=0.8, shape=1, stroke=2, width = 0.2, height = 0.2, size=2) +
+    geom_smooth( alpha=0.3) +
+    ggpubr::theme_pubclean() +
+    scale_fill_manual(values = c("#183555", "#FAC67A")) +
+    scale_colour_manual(values = c("#183555", "#FAC67A")) +
+    labs(y = "NISLL", x=feature_name , title = feature_name)
+}
+
+
+names(df_plot)
+
+# Generate density plots for all columns except Set
+feature_names <- colnames(df_plot)[-28]  # Exclude Set
+
+plots <- map(feature_names, create_density_plot)
+
+
+
+
+
+
+
+
+# Function to create correlation plots for each feature first visit NISLL
+
+df_target_vars_first <- fread( "../data/df_target_vars_first.txt")
+df_target_vars_imputed_first <- fread( "../data/df_target_vars_imputed_first.txt")
+
+
+df_plot_first <- df_target_vars_first %>% mutate(Set="Raw") %>%
+  bind_rows(df_target_vars_imputed_first %>% mutate(Set="Imputed")) 
+
+create_density_plot <- function(feature_name) {
+  ggplot(df_plot_first, aes(x = !!sym(feature_name), y=NISLL, colour=Set, fill=Set )) +
+    geom_jitter(alpha=0.8, shape=1, stroke=2, width = 0.2, height = 0.2, size=2) +
+    geom_smooth( alpha=0.3) +
+    ggpubr::theme_pubclean() +
+    scale_fill_manual(values = c("#183555", "#FAC67A")) +
+    scale_colour_manual(values = c("#183555", "#FAC67A")) +
+    labs(y = "NISLL", x=feature_name , title = feature_name)
+}
+
+
+names(df_plot)
+
+# Generate density plots for all columns except Set
+feature_names <- colnames(df_plot)[-28]  # Exclude Set
+
+plots <- map(feature_names, create_density_plot)
+
+
+
+df_target_vars
+df_target_vars_first
+
+df_target_vars_imputed
+df_target_vars_imputed_first
+
+unique(df_target_vars$FAP)
+unique(df_target_vars_first$FAP)
+unique(df_target_vars_imputed$FAP)
+unique(df_target_vars_imputed_first$FAP)
+
+
+
+                     ) 
+
+# Function to create  plots for each feature all visits FAP
+
+df_plot <- df_target_vars %>% mutate(Set="Raw") %>% filter(!is.na(FAP)) %>%
+  mutate(FAP=as.factor(FAP)) %>%
+  bind_rows(df_target_vars_imputed %>% mutate(Set="Imputed") %>% 
+              filter(!is.na(FAP)) %>% mutate(FAP=round(FAP)) %>% mutate(FAP=as.factor(FAP)) 
+            
+            
+create_density_plot <- function(feature_name) {
+  ggplot(df_plot, aes(x = FAP, y=!!sym(feature_name), colour=Set, fill=Set )) +
+    geom_jitter( alpha=0.7, shape=1, stroke=2, width = 0.3, height = 0.2, size=2) +
+    geom_boxplot(alpha=0.7, shape=1, stroke=2, width = 0.5, height = 0.5, size=1, notch = TRUE) +
+    ggpubr::theme_pubclean() +
+    scale_fill_manual(values = c("#183555", "#FAC67A")) +
+    scale_colour_manual(values = c("#183555", "#FAC67A")) +
+    labs(y = feature_name , x="FAP" , title = feature_name)
+}
+
+
+names(df_plot)
+
+# Generate density plots for all columns except Set
+feature_names <- colnames(df_plot)[-28]  # Exclude Set
+
+plots <- map(feature_names, create_density_plot)
+
 # ----------
