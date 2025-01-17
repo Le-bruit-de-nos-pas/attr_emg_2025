@@ -60,6 +60,43 @@ summary_table %>%
 
 df_target_vars %>% drop_na() # 63 left 63/453 14% only, not a chance
 
+# paste0(names(df_target_vars), collapse = '","')
+# 
+# 
+# target_column <- "NISLL"
+# 
+# columns_to_compare <- c("NISLL","FAP","MedianMotorRight_Wrist_ThumbAbduction",
+#                         "MedianMotorLeft_Wrist_ThumbAbduction","UlnarMotorRight_Wrist_FingerAdduction",
+#                         "UlnarMotorLeft_Wrist_FingerAdduction","SciatiquePopliteExterneMotorRight_Foot_DorsalisPedis",
+#                         "SciatiquePopliteExterneMotorLeft_Foot_DorsalisPedis","SciatiquePopliteInterneMotorRight_Ankle_CFPI",
+#                         "SciatiquePopliteInterneMotorLeft_Ankle_CFPI","RadialSensoryRight","RadialSensoryLeft",
+#                         "MedianSensoryRight","MedianSensoryLeft","UlnarSensoryRight","UlnarSensoryLeft",
+#                         "MusculocutaneousSensoryRight","MusculocutaneousSensoryLeft","SuralSensitifD","SuralSensoryLeft",
+#                         "MedianVelocityRight","MedianVelocityLeft","MedianDistalLatencyRight","MedianDistalLatencyLeft",
+#                         "Score_Total","Score_Hemi_Right","Score_UlnSPI")
+# 
+# correlation_results <- list()
+# 
+# for (col in columns_to_compare) {
+#   
+#   # Calculate Spearman correlation while dropping NAs
+#   correlation <- cor(df_target_vars[[target_column]], df_target_vars[[col]], method = "spearman", use = "complete.obs")
+#   
+#   # Store the result
+#   correlation_results[[col]] <- correlation
+# }
+# 
+# # Print the correlation results
+# print(correlation_results)
+
+
+cor_matrix <- cor(df_target_vars %>% select(where(is.numeric)), method = "spearman", use = "complete.obs")
+print(cor_matrix)
+
+cor_matrix <- data.frame(cor_matrix)
+
+fwrite(cor_matrix, "cor_matrix_raw.csv")
+
 
 # Impute missing values using PCA
 
@@ -121,8 +158,23 @@ summary_table %>%
 df_target_vars
 df_target_vars_imputed
 
-#fwrite(df_target_vars, "../data/df_target_vars.txt")
-#fwrite(df_target_vars_imputed, "../data/df_target_vars_imputed.txt")
+
+
+
+cor_matrix <- cor(df_target_vars_imputed %>% select(where(is.numeric)), method = "spearman", use = "complete.obs")
+print(cor_matrix)
+
+cor_matrix <- data.frame(cor_matrix)
+
+fwrite(cor_matrix, "cor_matrix_raw_imp.csv")
+
+
+
+
+
+
+fwrite(df_target_vars, "../data/df_target_vars.txt")
+fwrite(df_target_vars_imputed, "../data/df_target_vars_imputed.txt")
 
 
 
