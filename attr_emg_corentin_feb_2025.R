@@ -510,3 +510,383 @@ plots <- map(feature_names, create_density_plot)
 
 
 # ----------
+
+# Ridge, LASSO and Best Subset NISLL ----------
+
+
+library(leaps)
+library(glmnet)
+library(car)
+
+df_target_vars_imputed <- fread( "../data/df_target_vars_imputed.txt")
+
+df_target_vars_imputed <- df_target_vars_imputed %>% select(-c(FAP,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+
+
+# Ensure predictors are scaled
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(across(where(is.numeric), scale))
+
+
+Best Subset Selection
+set.seed(1)
+regit_full <- regsubsets(NISLL  ~ ., data = df_target_vars_imputed, nvmax = 22, really.big=T)
+reg_summary <- summary(regit_full)
+
+
+ignore <- data.frame(reg_summary$which)
+
+fwrite(ignore, "NISLL_best_subset_all.csv")
+
+
+NISLL_best_subset_all <- fread("NISLL_best_subset_all.csv")
+
+names(NISLL_best_subset_all)
+
+# "#183555", "#FAC67A"
+
+NISLL_best_subset_all %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbduction:MedianDistalLatencyLeft) %>%
+  mutate(Pres=ifelse(Pres==1, "Yes", "No")) %>%
+  rename("Predictor_Included"="Pres") %>%
+  mutate(Predictor_Included=as.factor(Predictor_Included)) %>%
+  ggplot(aes(x=Vars , y=Var, fill = Predictor_Included)) +
+  geom_tile(color = "snow", size = 0.1, show.legend = F) +
+  scale_fill_manual( values= c("snow", "#183555") ) +
+  #scale_x_discrete(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0)) +
+  coord_equal() +
+  theme_minimal() +
+  # scale_x_continuous(breaks = seq(min(Best_Subset_Predictors$vars),max(Best_Subset_Predictors$vars),by=1)) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  xlab("Number of Predictors") +ylab("Predictor Included (yes/no)")
+
+
+# Plot RSS, Adjusted R², Cp, and BIC
+
+# Set up the plot layout with 2 rows and 2 columns
+par(mfrow = c(2, 2))  # Arrange plots in a grid
+
+# Plot RSS with alternating colors and thicker lines
+plot(reg_summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l", lwd = 3, col = "#FAC67A")
+# # Plot Adjusted R² with alternating colors and thicker lines
+plot(reg_summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted R²", type = "l", lwd = 3, col = "#183555")
+# # Plot Cp with alternating colors and thicker lines
+plot(reg_summary$cp, xlab = "Number of Variables", ylab = "Cp", type = "l", lwd = 3, col = "#FAC67A")
+# # Plot BIC with alternating colors and thicker lines
+plot(reg_summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l", lwd = 3, col = "#183555")
+
+
+
+# Ensure predictors are scaled
+X <- model.matrix(NISLL ~ .  , data = df_target_vars_imputed)[, -1]  # Design matrix (exclude intercept)
+y <- df_target_vars_imputed$NISLL  # Response variable
+
+# LASSO Regression (alpha = 1)
+set.seed(1)
+lasso_cv <- cv.glmnet(X, y, alpha = 1, standardize = TRUE, maxit = 1e6)
+
+# Best lambda
+lasso_lambda_min <- lasso_cv$lambda.min
+lasso_lambda_1se <- lasso_cv$lambda.1se
+
+# Plot LASSO cross-validation results
+plot(lasso_cv)
+title("LASSO Cross-Validation", line = 2.5)
+
+# Extract coefficients for the best lambda
+lasso_coeffs <- coef(lasso_cv, s = "lambda.1se")
+print(lasso_coeffs)
+
+
+
+# Ridge Regression (alpha = 0)
+set.seed(1)
+ridge_cv <- cv.glmnet(X, y, alpha = 0, standardize = TRUE)
+
+# Best lambda
+ridge_lambda_min <- ridge_cv$lambda.min
+ridge_lambda_1se <- ridge_cv$lambda.1se
+
+# Plot Ridge cross-validation results
+plot(ridge_cv)
+title("Ridge Cross-Validation", line = 2.5)
+
+# Extract coefficients for the best lambda
+ridge_coeffs <- coef(ridge_cv, s = "lambda.1se")
+print(ridge_coeffs)
+
+
+
+
+# Elastic net
+
+elastic_net_cv <- cv.glmnet(X, y, alpha = 0.5, standardize = TRUE, maxit = 1e6)
+
+elastic_net_cv$lambda.min
+elastic_net_cv$lambda.1se
+
+elastic_net_coeffs <- coef(elastic_net_cv, s = "lambda.1se")
+print(elastic_net_coeffs)
+
+
+
+
+
+
+
+# Compare MSE
+lasso_mse <- min(lasso_cv$cvm)
+ridge_mse <- min(ridge_cv$cvm)
+elastic_mse <- min(elastic_net_cv$cvm)
+
+print(paste("LASSO MSE:", lasso_mse))
+print(paste("Ridge MSE:", ridge_mse))
+print(paste("Elastic MSE:", elastic_mse))
+
+
+
+# Predict function for glmnet models
+lasso_predictions <- predict(lasso_cv, newx = X, s = "lambda.1se")
+ridge_predictions <- predict(ridge_cv, newx = X, s = "lambda.1se")
+elastic_predictions <- predict(elastic_net_cv, newx = X, s = "lambda.1se")
+
+cor(lasso_predictions, data.frame(y), method="spearman")
+cor(ridge_predictions, data.frame(y), method="spearman")
+cor(elastic_predictions, data.frame(y), method="spearman")
+
+
+# Create data frames for plotting
+lasso_plot_data <- data.frame(
+  Actual = y,
+  Predicted = as.numeric(lasso_predictions)
+)
+
+ridge_plot_data <- data.frame(
+  Actual = y,
+  Predicted = as.numeric(ridge_predictions)
+)
+
+
+elastic_plot_data <- data.frame(
+  Actual = y,
+  Predicted = as.numeric(elastic_predictions)
+)
+
+
+# LASSO Plot
+ggplot(lasso_plot_data, aes(x = Actual, y = Predicted)) +
+  geom_abline(slope = 1, intercept = 0, linewidth=1, color = "#FAC67A") +
+  geom_jitter(alpha = 0.6, color = "#183555", shape=1, stroke=2, width = 0.3, height = 0.3) +
+  theme_minimal() +
+  xlim(-3,3) + ylim(-3,3) +
+  labs(title = "LASSO: Actual vs Predicted", x = "Actual Standardized Values", y = "Predicted Standardized Values")
+
+# Ridge Plot
+ggplot(ridge_plot_data, aes(x = Actual, y = Predicted)) +
+  geom_abline(slope = 1, intercept = 0, linewidth=1, color = "#FAC67A") +
+  geom_jitter(alpha = 0.6, color = "#183555", shape=1, stroke=2, width = 0.3, height = 0.3) +
+  theme_minimal() +
+  xlim(-3,3) + ylim(-3,3) +
+  labs(title = "Ridge: Actual vs Predicted", x = "Actual Standardized Values", y = "Predicted Standardized Values")
+
+# Elastic Plot
+ggplot(elastic_plot_data, aes(x = Actual, y = Predicted)) +
+  geom_abline(slope = 1, intercept = 0, linewidth=1, color = "#FAC67A") +
+  geom_jitter(alpha = 0.6, color = "#183555", shape=1, stroke=2, width = 0.3, height = 0.3) +
+  theme_minimal() +
+  xlim(-3,3) + ylim(-3,3) +
+  labs(title = "ElasticNet: Actual vs Predicted", x = "Actual Standardized Values", y = "Predicted Standardized Values")
+
+
+# ----------
+# Ridge, LASSO and Best Subset FAP ----------
+
+
+library(leaps)
+library(glmnet)
+library(car)
+
+df_target_vars_imputed <- fread( "../data/df_target_vars_imputed.txt")
+
+df_target_vars_imputed <- df_target_vars_imputed %>% select(-c(NISLL ,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+
+unique(df_target_vars_imputed$FAP)
+
+df_target_vars_imputed$FAP <- round(df_target_vars_imputed$FAP)
+
+# Ensure predictors are scaled
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(across(where(is.numeric), scale))
+
+
+# Best Subset Selection
+set.seed(1)
+regit_full <- regsubsets(FAP  ~ ., data = df_target_vars_imputed, nvmax = 22, really.big=T)
+reg_summary <- summary(regit_full)
+
+
+ignore <- data.frame(reg_summary$which)
+
+fwrite(ignore, "FAP_best_subset_all.csv")
+
+
+NISLL_best_subset_all <- fread("NISLL_best_subset_all.csv")
+
+names(NISLL_best_subset_all)
+
+# "#183555", "#FAC67A"
+
+NISLL_best_subset_all %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbduction:MedianDistalLatencyLeft) %>%
+  mutate(Pres=ifelse(Pres==1, "Yes", "No")) %>%
+  rename("Predictor_Included"="Pres") %>%
+  mutate(Predictor_Included=as.factor(Predictor_Included)) %>%
+  ggplot(aes(x=Vars , y=Var, fill = Predictor_Included)) +
+  geom_tile(color = "snow", size = 0.1, show.legend = F) +
+  scale_fill_manual( values= c("snow", "#183555") ) +
+  #scale_x_discrete(expand=c(0,0)) +
+  scale_y_discrete(expand=c(0,0)) +
+  coord_equal() +
+  theme_minimal() +
+  # scale_x_continuous(breaks = seq(min(Best_Subset_Predictors$vars),max(Best_Subset_Predictors$vars),by=1)) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  xlab("Number of Predictors") +ylab("Predictor Included (yes/no)")
+
+
+# Plot RSS, Adjusted R², Cp, and BIC
+
+# Set up the plot layout with 2 rows and 2 columns
+par(mfrow = c(2, 2))  # Arrange plots in a grid
+
+# Plot RSS with alternating colors and thicker lines
+plot(reg_summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l", lwd = 3, col = "#FAC67A")
+# # Plot Adjusted R² with alternating colors and thicker lines
+plot(reg_summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted R²", type = "l", lwd = 3, col = "#183555")
+# # Plot Cp with alternating colors and thicker lines
+plot(reg_summary$cp, xlab = "Number of Variables", ylab = "Cp", type = "l", lwd = 3, col = "#FAC67A")
+# # Plot BIC with alternating colors and thicker lines
+plot(reg_summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l", lwd = 3, col = "#183555")
+
+
+
+# Ensure predictors are scaled
+X <- model.matrix(FAP ~ .  , data = df_target_vars_imputed)[, -1]  # Design matrix (exclude intercept)
+y <- df_target_vars_imputed$FAP  # Response variable
+
+# LASSO Regression (alpha = 1)
+set.seed(1)
+lasso_cv <- cv.glmnet(X, y, alpha = 1, standardize = TRUE, maxit = 1e6)
+
+# Best lambda
+lasso_lambda_min <- lasso_cv$lambda.min
+lasso_lambda_1se <- lasso_cv$lambda.1se
+
+# Plot LASSO cross-validation results
+plot(lasso_cv)
+title("LASSO Cross-Validation", line = 2.5)
+
+# Extract coefficients for the best lambda
+lasso_coeffs <- coef(lasso_cv, s = "lambda.1se")
+print(lasso_coeffs)
+
+
+
+# Ridge Regression (alpha = 0)
+set.seed(1)
+ridge_cv <- cv.glmnet(X, y, alpha = 0, standardize = TRUE)
+
+# Best lambda
+ridge_lambda_min <- ridge_cv$lambda.min
+ridge_lambda_1se <- ridge_cv$lambda.1se
+
+# Plot Ridge cross-validation results
+plot(ridge_cv)
+title("Ridge Cross-Validation", line = 2.5)
+
+# Extract coefficients for the best lambda
+ridge_coeffs <- coef(ridge_cv, s = "lambda.1se")
+print(ridge_coeffs)
+
+
+
+
+# Elastic net
+
+elastic_net_cv <- cv.glmnet(X, y, alpha = 0.5, standardize = TRUE, maxit = 1e6)
+
+elastic_net_cv$lambda.min
+elastic_net_cv$lambda.1se
+
+elastic_net_coeffs <- coef(elastic_net_cv, s = "lambda.1se")
+print(elastic_net_coeffs)
+
+
+
+
+
+
+
+# Compare MSE
+lasso_mse <- min(lasso_cv$cvm)
+ridge_mse <- min(ridge_cv$cvm)
+elastic_mse <- min(elastic_net_cv$cvm)
+
+print(paste("LASSO MSE:", lasso_mse))
+print(paste("Ridge MSE:", ridge_mse))
+print(paste("Elastic MSE:", elastic_mse))
+
+
+
+# Predict function for glmnet models
+lasso_predictions <- predict(lasso_cv, newx = X, s = "lambda.1se")
+ridge_predictions <- predict(ridge_cv, newx = X, s = "lambda.1se")
+elastic_predictions <- predict(elastic_net_cv, newx = X, s = "lambda.1se")
+
+cor(lasso_predictions, data.frame(y), method="spearman")
+cor(ridge_predictions, data.frame(y), method="spearman")
+cor(elastic_predictions, data.frame(y), method="spearman")
+
+
+# Create data frames for plotting
+lasso_plot_data <- data.frame(
+  Actual = y,
+  Predicted = as.numeric(lasso_predictions)
+)
+
+ridge_plot_data <- data.frame(
+  Actual = y,
+  Predicted = as.numeric(ridge_predictions)
+)
+
+
+elastic_plot_data <- data.frame(
+  Actual = y,
+  Predicted = as.numeric(elastic_predictions)
+)
+
+
+# LASSO Plot
+ggplot(lasso_plot_data, aes(x = Actual, y = Predicted)) +
+  geom_abline(slope = 1, intercept = 0, linewidth=1, color = "#FAC67A") +
+  geom_jitter(alpha = 0.6, color = "#183555", shape=1, stroke=2, width = 0.2, height = 0.2) +
+  theme_minimal() +
+  xlim(-3,3) + ylim(-3,3) +
+  labs(title = "LASSO: Actual vs Predicted", x = "Actual Standardized Values", y = "Predicted Standardized Values")
+
+# Ridge Plot
+ggplot(ridge_plot_data, aes(x = Actual, y = Predicted)) +
+  geom_abline(slope = 1, intercept = 0, linewidth=1, color = "#FAC67A") +
+  geom_jitter(alpha = 0.6, color = "#183555", shape=1, stroke=2, width = 0.2, height = 0.2) +
+  theme_minimal() +
+  xlim(-3,3) + ylim(-3,3) +
+  labs(title = "Ridge: Actual vs Predicted", x = "Actual Standardized Values", y = "Predicted Standardized Values")
+
+# Elastic Plot
+ggplot(elastic_plot_data, aes(x = Actual, y = Predicted)) +
+  geom_abline(slope = 1, intercept = 0, linewidth=1, color = "#FAC67A") +
+  geom_jitter(alpha = 0.6, color = "#183555", shape=1, stroke=2, width = 0.2, height = 0.2) +
+  theme_minimal() +
+  xlim(-3,3) + ylim(-3,3) +
+  labs(title = "ElasticNet: Actual vs Predicted", x = "Actual Standardized Values", y = "Predicted Standardized Values")
+
+
+# ----------
