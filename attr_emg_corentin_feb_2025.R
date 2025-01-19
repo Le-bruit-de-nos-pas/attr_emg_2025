@@ -528,7 +528,7 @@ df_target_vars_imputed <- df_target_vars_imputed %>%
   mutate(across(where(is.numeric), scale))
 
 
-Best Subset Selection
+#Best Subset Selection
 set.seed(1)
 regit_full <- regsubsets(NISLL  ~ ., data = df_target_vars_imputed, nvmax = 22, really.big=T)
 reg_summary <- summary(regit_full)
@@ -897,34 +897,34 @@ library(leaps)
 library(glmnet)
 library(car)
 
-df_target_vars_imputed <- fread( "../data/df_target_vars_imputed.txt")
+df_target_vars_imputed_first <- fread( "../data/df_target_vars_imputed_first.txt")
 
-df_target_vars_imputed <- df_target_vars_imputed %>% select(-c(FAP,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+df_target_vars_imputed_first <- df_target_vars_imputed_first %>% select(-c(FAP,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
 
 
 # Ensure predictors are scaled
-df_target_vars_imputed <- df_target_vars_imputed %>%
+df_target_vars_imputed_first <- df_target_vars_imputed_first %>%
   mutate(across(where(is.numeric), scale))
 
 
-Best Subset Selection
+# Best Subset Selection
 set.seed(1)
-regit_full <- regsubsets(NISLL  ~ ., data = df_target_vars_imputed, nvmax = 22, really.big=T)
+regit_full <- regsubsets(NISLL  ~ ., data = df_target_vars_imputed_first, nvmax = 22, really.big=T)
 reg_summary <- summary(regit_full)
 
 
 ignore <- data.frame(reg_summary$which)
 
-fwrite(ignore, "NISLL_best_subset_all.csv")
+fwrite(ignore, "NISLL_best_subset_all_first.csv")
 
 
-NISLL_best_subset_all <- fread("NISLL_best_subset_all.csv")
+NISLL_best_subset_all_first <- fread("NISLL_best_subset_all_first.csv")
 
-names(NISLL_best_subset_all)
+names(NISLL_best_subset_all_first)
 
 # "#183555", "#FAC67A"
 
-NISLL_best_subset_all %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbduction:MedianDistalLatencyLeft) %>%
+NISLL_best_subset_all_first %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbduction:MedianDistalLatencyLeft) %>%
   mutate(Pres=ifelse(Pres==1, "Yes", "No")) %>%
   rename("Predictor_Included"="Pres") %>%
   mutate(Predictor_Included=as.factor(Predictor_Included)) %>%
@@ -943,7 +943,7 @@ NISLL_best_subset_all %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbductio
 # Plot RSS, Adjusted R², Cp, and BIC
 
 # Set up the plot layout with 2 rows and 2 columns
-par(mfrow = c(2, 2))  # Arrange plots in a grid
+
 
 # Plot RSS with alternating colors and thicker lines
 plot(reg_summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l", lwd = 3, col = "#FAC67A")
@@ -957,8 +957,8 @@ plot(reg_summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l", lw
 
 
 # Ensure predictors are scaled
-X <- model.matrix(NISLL ~ .  , data = df_target_vars_imputed)[, -1]  # Design matrix (exclude intercept)
-y <- df_target_vars_imputed$NISLL  # Response variable
+X <- model.matrix(NISLL ~ .  , data = df_target_vars_imputed_first)[, -1]  # Design matrix (exclude intercept)
+y <- df_target_vars_imputed_first$NISLL  # Response variable
 
 # LASSO Regression (alpha = 1)
 set.seed(1)
@@ -1085,37 +1085,37 @@ library(leaps)
 library(glmnet)
 library(car)
 
-df_target_vars_imputed <- fread( "../data/df_target_vars_imputed.txt")
+df_target_vars_imputed_first <- fread( "../data/df_target_vars_imputed_first.txt")
 
-df_target_vars_imputed <- df_target_vars_imputed %>% select(-c(NISLL ,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+df_target_vars_imputed_first <- df_target_vars_imputed_first %>% select(-c(NISLL ,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
 
-unique(df_target_vars_imputed$FAP)
+unique(df_target_vars_imputed_first$FAP)
 
-df_target_vars_imputed$FAP <- round(df_target_vars_imputed$FAP)
+df_target_vars_imputed_first$FAP <- round(df_target_vars_imputed_first$FAP)
 
 # Ensure predictors are scaled
-df_target_vars_imputed <- df_target_vars_imputed %>%
+df_target_vars_imputed_first <- df_target_vars_imputed_first %>%
   mutate(across(where(is.numeric), scale))
 
 
 # Best Subset Selection
 set.seed(1)
-regit_full <- regsubsets(FAP  ~ ., data = df_target_vars_imputed, nvmax = 22, really.big=T)
+regit_full <- regsubsets(FAP  ~ ., data = df_target_vars_imputed_first, nvmax = 22, really.big=T)
 reg_summary <- summary(regit_full)
 
 
 ignore <- data.frame(reg_summary$which)
 
-fwrite(ignore, "FAP_best_subset_all.csv")
+fwrite(ignore, "FAP_best_subset_all_first.csv")
 
 
-FAP_best_subset_all <- fread("FAP_best_subset_all.csv")
+FAP_best_subset_all_first <- fread("FAP_best_subset_all_first.csv")
 
-names(FAP_best_subset_all)
+names(FAP_best_subset_all_first)
 
 # "#183555", "#FAC67A"
 
-FAP_best_subset_all %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbduction:MedianDistalLatencyLeft) %>%
+FAP_best_subset_all_first %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbduction:MedianDistalLatencyLeft) %>%
   mutate(Pres=ifelse(Pres==1, "Yes", "No")) %>%
   rename("Predictor_Included"="Pres") %>%
   mutate(Predictor_Included=as.factor(Predictor_Included)) %>%
@@ -1134,7 +1134,7 @@ FAP_best_subset_all %>% gather(Var, Pres, MedianMotorRight_Wrist_ThumbAbduction:
 # Plot RSS, Adjusted R², Cp, and BIC
 
 # Set up the plot layout with 2 rows and 2 columns
-par(mfrow = c(2, 2))  # Arrange plots in a grid
+
 
 # Plot RSS with alternating colors and thicker lines
 plot(reg_summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l", lwd = 3, col = "#FAC67A")
@@ -1148,8 +1148,8 @@ plot(reg_summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l", lw
 
 
 # Ensure predictors are scaled
-X <- model.matrix(FAP ~ .  , data = df_target_vars_imputed)[, -1]  # Design matrix (exclude intercept)
-y <- df_target_vars_imputed$FAP  # Response variable
+X <- model.matrix(FAP ~ .  , data = df_target_vars_imputed_first)[, -1]  # Design matrix (exclude intercept)
+y <- df_target_vars_imputed_first$FAP  # Response variable
 
 # LASSO Regression (alpha = 1)
 set.seed(1)
@@ -1269,3 +1269,86 @@ ggplot(elastic_plot_data, aes(x = Actual, y = Predicted)) +
 
 
 # ----------
+# Plot variables over time; Raw and Imputed ---------------
+df_target_vars <- fread( "../data/df_target_vars.txt")
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+df_target_vars <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars)
+
+raw <- df_target_vars %>% mutate(Set="Raw")
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed)
+
+imputed <- df_target_vars_imputed %>% mutate(Set="Imputed")
+
+to_plot <- imputed %>% bind_rows(raw)
+
+
+create_density_plot <- function(feature_name) {
+  ggplot(to_plot, aes(x = Visite_date, y=!!sym(feature_name), colour=Set, fill=Set )) +
+    geom_line(aes(group=interaction(Set, Patient)), size=1, alpha=0.2) +
+    geom_jitter(  alpha=0.4, shape=1, stroke=2, width = 0.3, height = 0.3, size=1) +
+    stat_smooth(method="loess",  alpha=0.4, lwd=1.5, se=TRUE)+
+    theme_minimal() +
+    labs(y = paste0(feature_name, "\n"), x="\n Elapsed Number of Days Since 1st Eval" , title = feature_name) +
+    scale_fill_manual(values = c("#183555", "#FAC67A")) +
+    scale_colour_manual(values = c("#183555", "#FAC67A")) +
+    theme(axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.position = "right") +
+    theme(panel.background = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.text = element_blank(),
+          axis.line = element_blank(),
+          axis.text.x = element_text(size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.title.x = element_text(size = 12, vjust = -0.5),
+          axis.title.y = element_text(size = 12, vjust = -0.5),
+          plot.margin = margin(5, 5, 5, 5, "pt")) 
+}
+
+
+names(to_plot)[3:29]
+
+# Generate density plots for all columns except Set
+feature_names <- colnames(to_plot)[3:29]  # Exclude Set
+
+plots <- map(feature_names, create_density_plot)
+
+plots[[2]]
+plots
+
+# -----------
