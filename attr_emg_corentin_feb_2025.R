@@ -1515,3 +1515,120 @@ plots
 
 
 # ----------
+
+# Linear Mixed-effects Models - Imputed - Change Over Time ---------------
+df_target_vars <- fread( "../data/df_target_vars.txt")
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+df_target_vars <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars)
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed)
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% ungroup()
+
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(across(where(is.numeric), scale))
+
+
+library(lme4)
+
+
+df <- df_target_vars_imputed
+
+emg_vars <- paste0(names(df_target_vars_imputed)[3:29])
+
+
+# Fit models for each variable and store results
+results <- list()
+
+for (emg_var in emg_vars) {
+  # Fit the mixed-effects model
+  model <- lmer(as.formula(paste(emg_var, "~ Visite_date + (Visite_date | Patient )")), data = df)
+  
+  # Save the model summary
+  results[[emg_var]] <- summary(model)
+}
+
+
+
+
+
+
+
+emg_vars <- paste0(names(df_target_vars_imputed)[3:29])
+
+results <- list()
+
+for (emg_var in emg_vars) {
+  # Fit the model
+  model <- lmer(as.formula(paste(emg_var, "~ Visite_date + (Visite_date | Patient)")), data = df)
+  
+  # Extract fixed effects
+  summary_model <- summary(model)
+  fixed_effects <- data.frame(
+    Variable = emg_var,
+    Term = rownames(summary_model$coefficients),
+    Estimate = summary_model$coefficients[, "Estimate"],
+    StdError = summary_model$coefficients[, "Std. Error"],
+    tValue = summary_model$coefficients[, "t value"],
+    pValue = 2 * pt(-abs(summary_model$coefficients[, "t value"]), 
+                    df = nrow(df) - length(fixef(model)))
+  )
+  
+  # Store results
+  results[[emg_var]] <- fixed_effects
+}
+
+# Combine all results into a single data frame
+all_fixed_effects <- do.call(rbind, results)
+
+print(all_fixed_effects)
+
+# Assume 'p_values' is your vector of p-values
+adjusted_pvalues_bonferroni <- p.adjust(all_fixed_effects$pValue, method = "bonferroni")
+adjusted_pvalues_holm <- p.adjust(all_fixed_effects$pValue, method = "holm")
+adjusted_pvalues_bh <- p.adjust(all_fixed_effects$pValue, method = "BH")  # Benjamini-Hochberg
+
+# Add adjusted p-values to your results data frame
+all_fixed_effects$Bonferroni <- adjusted_pvalues_bonferroni
+all_fixed_effects$Holm <- adjusted_pvalues_holm
+all_fixed_effects$BH <- adjusted_pvalues_bh
+
+
+all_fixed_effects %>% filter(Term=="Visite_date")
+# -----------
