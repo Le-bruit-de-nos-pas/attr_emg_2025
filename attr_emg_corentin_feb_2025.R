@@ -1720,6 +1720,7 @@ library(lme4)
 
 df <- df_with_deltas_imputed
 
+
 emg_vars <- paste0(names(df)[5:29])
 
 
@@ -1733,7 +1734,6 @@ for (emg_var in emg_vars) {
   # Save the model summary
   results[[emg_var]] <- summary(model)
 }
-
 
 
 
@@ -1784,5 +1784,107 @@ row.names(all_fixed_effects) <- NULL
 
 
 all_fixed_effects %>% filter(Term!="(Intercept)") %>% select(-Term)
+
+# -----------
+# Linear Mixed-effects Models - Imputed - Lead NISLL vs Lag EMG ---------------
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+sum(is.na(df_target_vars_imputed))
+
+names(attr_emg_input)
+
+unique(df_target_vars_imputed$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed)
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(across(where(is.numeric), scale))
+
+sum(is.na(df_target_vars_imputed))
+
+library(lme4)
+
+
+
+df <- df_target_vars_imputed
+
+
+# Create lagged dataset
+df_lagged <- df %>%
+  group_by(Patient) %>%
+  arrange(Visite_date) %>%
+  mutate(NISLL_future = lead(NISLL, n = 1)) %>%
+  filter(!is.na(NISLL_future))
+
+# Fit mixed-effects model
+model_lagged <- lmer(NISLL_future ~ Score_Total  + (1 | Patient), data = df_lagged)
+
+
+
+
+
+
+
+emg_vars <- paste0(names(df_lagged)[5:29])
+
+results <- list()
+
+for (emg_var in emg_vars) {
+  # Fit the model
+  model <-  lmer(as.formula(paste("NISLL_future  ~", emg_var, "+ (1 | Patient)")), data = df_lagged)
+  
+  # Extract fixed effects
+  summary_model <- summary(model)
+  fixed_effects <- data.frame(
+    Variable = emg_var,
+    Term = rownames(summary_model$coefficients),
+    Estimate = summary_model$coefficients[, "Estimate"],
+    StdError = summary_model$coefficients[, "Std. Error"],
+    tValue = summary_model$coefficients[, "t value"],
+    pValue = 2 * pt(-abs(summary_model$coefficients[, "t value"]), 
+                    df = nrow(df) - length(fixef(model)))
+  )
+  
+  # Store results
+  results[[emg_var]] <- fixed_effects
+}
+
+# Combine all results into a single data frame
+all_fixed_effects <- do.call(rbind, results)
+
+print(all_fixed_effects)
+
+
+
+# Assume 'p_values' is your vector of p-values
+adjusted_pvalues_bonferroni <- p.adjust(all_fixed_effects$pValue, method = "bonferroni")
+adjusted_pvalues_holm <- p.adjust(all_fixed_effects$pValue, method = "holm")
+adjusted_pvalues_bh <- p.adjust(all_fixed_effects$pValue, method = "BH")  # Benjamini-Hochberg
+
+# Add adjusted p-values to your results data frame
+all_fixed_effects$Bonferroni <- adjusted_pvalues_bonferroni
+all_fixed_effects$Holm <- adjusted_pvalues_holm
+all_fixed_effects$BH <- adjusted_pvalues_bh
+
+
+
+all_fixed_effects %>% filter(Term!="(Intercept)") %>% select(-c(Term, Variable))
+
 
 # -----------
