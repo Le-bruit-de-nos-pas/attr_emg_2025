@@ -1352,3 +1352,165 @@ plots[[2]]
 plots
 
 # -----------
+# Plot variable Deltas over time; Raw and Imputed -----------
+
+df_target_vars <- fread( "../data/df_target_vars.txt")
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+df_target_vars <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars)
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed)
+
+
+
+
+
+df <- df_target_vars_imputed
+
+# First, let's define the function to compute normalized delta for each variable
+
+calculate_deltas <- function(df, emg_vars) {
+  df <- df %>%
+    group_by(Patient) %>%
+    arrange(Patient, Visite_date)  # Ensure data is sorted by patient and visit day
+  
+  # Calculate deltas for each EMG variable
+  for (emg_var in emg_vars) {
+    delta_var <- paste0("delta_", emg_var)  # Create new column name for delta
+    df <- df %>%
+      mutate(!!delta_var := ifelse(
+        row_number() > 1,  # Skip first row (no previous data)
+        (get(emg_var) - lag(get(emg_var))) ,
+        NA  # First visit delta is NA
+      ))
+  }
+  
+  
+  return(df)
+}
+
+# List of EMG variable names (EMG1 to EMG30)
+emg_vars <- paste0(names(df)[3:29])
+
+# Apply the function to calculate deltas
+df_with_deltas <- calculate_deltas(df, emg_vars)
+
+df_with_deltas_imputed <- df_with_deltas %>% select(Patient, Visite_date, 30:56) %>% ungroup() %>% drop_na()
+
+
+
+
+
+
+df <- df_target_vars
+
+# First, let's define the function to compute normalized delta for each variable
+
+calculate_deltas <- function(df, emg_vars) {
+  df <- df %>%
+    group_by(Patient) %>%
+    arrange(Patient, Visite_date)  # Ensure data is sorted by patient and visit day
+  
+  # Calculate deltas for each EMG variable
+  for (emg_var in emg_vars) {
+    delta_var <- paste0("delta_", emg_var)  # Create new column name for delta
+    df <- df %>%
+      mutate(!!delta_var := ifelse(
+        row_number() > 1,  # Skip first row (no previous data)
+        (get(emg_var) - lag(get(emg_var))) ,
+        NA  # First visit delta is NA
+      ))
+  }
+  
+  
+  return(df)
+}
+
+# List of EMG variable names (EMG1 to EMG30)
+emg_vars <- paste0(names(df)[3:29])
+
+# Apply the function to calculate deltas
+df_with_deltas <- calculate_deltas(df, emg_vars)
+
+df_with_deltas <- df_with_deltas %>% select(Patient, Visite_date, 30:56) %>% ungroup() %>% filter(Visite_date!=0)
+
+
+df_with_deltas_imputed <- df_with_deltas_imputed %>% mutate(Set="Imputed")
+df_with_deltas <- df_with_deltas %>% mutate(Set="Raw")
+
+
+
+to_plot <- df_with_deltas_imputed %>% bind_rows(df_with_deltas)
+
+
+
+create_density_plot <- function(feature_name) {
+  ggplot(to_plot, aes(x = Visite_date, y=!!sym(feature_name), colour=Set, fill=Set )) +
+    geom_line(aes(group=interaction(Set, Patient)), size=1, alpha=0.2) +
+    geom_jitter(  alpha=0.4, shape=1, stroke=2, width = 0.3, size=1) +
+    stat_smooth(method="loess",  alpha=0.4, lwd=1.5, se=TRUE)+
+    theme_minimal() +
+    labs(y = paste0(feature_name, "\n"), x="\n Elapsed Number of Days Since 1st Eval" , title = feature_name) +
+    scale_fill_manual(values = c("#183555", "#FAC67A")) +
+    scale_colour_manual(values = c("#183555", "#FAC67A")) +
+    theme(axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          legend.position = "right") +
+    theme(panel.background = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.background = element_blank(),
+          strip.text = element_blank(),
+          axis.line = element_blank(),
+          axis.text.x = element_text(size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.title.x = element_text(size = 12, vjust = -0.5),
+          axis.title.y = element_text(size = 12, vjust = -0.5),
+          plot.margin = margin(5, 5, 5, 5, "pt")) 
+}
+
+
+names(to_plot)[3:29]
+
+# Generate density plots for all columns except Set
+feature_names <- colnames(to_plot)[3:29]  # Exclude Set
+
+plots <- map(feature_names, create_density_plot)
+
+plots[[1]]
+plots
+
+
+# ----------
