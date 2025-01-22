@@ -2,6 +2,7 @@ library(readxl)
 library(tidyverse)
 library(data.table)
 library(missMDA)
+options(scipen = 999)
 
 # Summary statistics for target variables: raw and imputed --------------------------------------------
 
