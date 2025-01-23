@@ -1517,24 +1517,6 @@ plots
 # ----------
 
 # Linear Mixed-effects Models - Imputed - Change Over Time ---------------
-df_target_vars <- fread( "../data/df_target_vars.txt")
-
-attr_emg_input <- fread("../data/attr_emg_input.txt")
-
-names(attr_emg_input)
-
-unique(attr_emg_input$Enrolled)
-
-attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
-
-attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
-  mutate(Visite_date=as.Date(Visite_date)) %>%
-  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
-  mutate(first=min(Visite_date)) %>%
-  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
-
-df_target_vars <- attr_emg_input %>% select(Patient, Visite_date) %>%
-  bind_cols(df_target_vars)
 
 
 attr_emg_input <- fread("../data/attr_emg_input.txt")
@@ -1552,6 +1534,10 @@ attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
   arrange(Patient, Visite_date) %>% group_by(Patient) %>%
   mutate(first=min(Visite_date)) %>%
   mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+sum(is.na(df_target_vars_imputed))
+
 
 df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
   bind_cols(df_target_vars_imputed)
@@ -1631,27 +1617,10 @@ all_fixed_effects$BH <- adjusted_pvalues_bh
 
 
 all_fixed_effects %>% filter(Term=="Visite_date")
+
 # -----------
 # Linear Mixed-effects Models - Imputed - Delta NISLL vs Delta EMG ---------------
 
-df_target_vars <- fread( "../data/df_target_vars.txt")
-
-attr_emg_input <- fread("../data/attr_emg_input.txt")
-
-names(attr_emg_input)
-
-unique(attr_emg_input$Enrolled)
-
-attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
-
-attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
-  mutate(Visite_date=as.Date(Visite_date)) %>%
-  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
-  mutate(first=min(Visite_date)) %>%
-  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
-
-df_target_vars <- attr_emg_input %>% select(Patient, Visite_date) %>%
-  bind_cols(df_target_vars)
 
 
 attr_emg_input <- fread("../data/attr_emg_input.txt")
@@ -1673,6 +1642,7 @@ attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
 df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
   bind_cols(df_target_vars_imputed)
 
+sum(is.na(df_target_vars_imputed))
 
 
 
@@ -1845,6 +1815,9 @@ emg_vars <- paste0(names(df_lagged)[5:29])
 
 results <- list()
 
+
+sum(is.na(df_lagged))
+
 for (emg_var in emg_vars) {
   # Fit the model
   model <-  lmer(as.formula(paste("NISLL_future  ~", emg_var, "+ (1 | Patient)")), data = df_lagged)
@@ -1945,6 +1918,8 @@ emg_vars <- paste0(names(df)[3:29])
 # Apply the function to calculate deltas
 df_with_deltas <- calculate_deltas(df, emg_vars)
 
+sum(is.na(df_with_deltas))
+
 df_with_deltas_imputed <- df_with_deltas %>% select(Patient, Visite_date, 30:56) %>% ungroup() %>% drop_na()
 
 
@@ -2023,7 +1998,7 @@ row.names(all_fixed_effects) <- NULL
 all_fixed_effects %>% filter(Term!="(Intercept)") %>% select(-c(Variable, Term))
 
 # -----------
-# Linear Mixed-effects Models - Imputed - Lead NISLL vs Lag EMG ---------------
+# Linear Mixed-effects Models - Imputed - Lead FAP vs Lag EMG ---------------
 
 
 attr_emg_input <- fread("../data/attr_emg_input.txt")
