@@ -2099,3 +2099,144 @@ all_fixed_effects %>% filter(Term!="(Intercept)") %>% select(-c(Term, Variable))
 
 
 # -----------
+# Get the coeficientes for simpler LASSO Model ----------
+
+
+library(leaps)
+library(glmnet)
+library(car)
+
+df_target_vars_imputed <- fread( "../data/df_target_vars_imputed.txt")
+
+df_target_vars_imputed <- df_target_vars_imputed %>% select(-c(FAP,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+
+
+# Ensure predictors are scaled
+#df_target_vars_imputed <- df_target_vars_imputed %>%
+# mutate(across(where(is.numeric), scale))
+
+
+
+# Ensure predictors are scaled
+X <- model.matrix(NISLL ~ .  , data = df_target_vars_imputed)[, -1]  # Design matrix (exclude intercept)
+y <- df_target_vars_imputed$NISLL  # Response variable
+
+# LASSO Regression (alpha = 1)
+set.seed(1)
+lasso_cv <- cv.glmnet(X, y, alpha = 1, standardize = FALSE, maxit = 1e6)
+
+# Best lambda
+lasso_lambda_min <- lasso_cv$lambda.min
+lasso_lambda_1se <- lasso_cv$lambda.1se
+
+
+# Extract coefficients for the best lambda
+lasso_coeffs <- coef(lasso_cv, s = "lambda.1se")
+print(lasso_coeffs)
+
+
+# (Intercept)                                           46.37375791
+# MedianMotorRight_Wrist_ThumbAbduction                  .         
+# MedianMotorLeft_Wrist_ThumbAbduction                   .         
+# UlnarMotorRight_Wrist_FingerAdduction                 -0.85954254
+# UlnarMotorLeft_Wrist_FingerAdduction                  -0.86771705
+# ExternalPoplitealSciaticMotorRight_Foot_DorsalisPedis  .         
+# ExternalPoplitealSciaticMotorLeft_Foot_DorsalisPedis  -0.36677401
+# InternalPoplitealSciaticMotorRight_Ankle_CFPI         -1.13347535
+# InternalPoplitealSciaticMotorLeft_Ankle_CFPI           .         
+# RadialSensoryRight                                     .         
+# RadialSensoryLeft                                     -0.20191231
+# MedianSensoryRight                                     0.15193386
+# MedianSensoryLeft                                      0.11927266
+# UlnarSensoryRight                                      0.33440684
+# UlnarSensoryLeft                                      -0.09857558
+# MusculocutaneousSensoryRight                           .         
+# MusculocutaneousSensoryLeft                           -0.21570357
+# SuralSensitifD                                        -0.32001038
+# SuralSensoryLeft                                      -0.16372944
+# MedianVelocityRight                                   -0.06083141
+# MedianVelocityLeft                                    -0.19897490
+# MedianDistalLatencyRight                               .         
+# MedianDistalLatencyLeft                                . 
+
+
+
+
+
+# First VISIT
+
+
+df_target_vars_imputed_first <- fread( "../data/df_target_vars_imputed_first.txt")
+
+df_target_vars_imputed_first <- df_target_vars_imputed_first %>% select(-c(FAP,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+
+
+
+# Ensure predictors are scaled
+X <- model.matrix(NISLL ~ .  , data = df_target_vars_imputed_first)[, -1]  # Design matrix (exclude intercept)
+y <- df_target_vars_imputed_first$NISLL  # Response variable
+
+# LASSO Regression (alpha = 1)
+set.seed(1)
+lasso_cv <- cv.glmnet(X, y, alpha = 1, standardize = FALSE, maxit = 1e6)
+
+# Best lambda
+lasso_lambda_min <- lasso_cv$lambda.min
+lasso_lambda_1se <- lasso_cv$lambda.1se
+
+
+# Extract coefficients for the best lambda
+lasso_coeffs <- coef(lasso_cv, s = "lambda.1se")
+print(lasso_coeffs)
+
+
+# (Intercept)                                           34.75210301
+# MedianMotorRight_Wrist_ThumbAbduction                  .         
+# MedianMotorLeft_Wrist_ThumbAbduction                   .         
+# UlnarMotorRight_Wrist_FingerAdduction                  .         
+# UlnarMotorLeft_Wrist_FingerAdduction                   .         
+# ExternalPoplitealSciaticMotorRight_Foot_DorsalisPedis  .         
+# ExternalPoplitealSciaticMotorLeft_Foot_DorsalisPedis   .         
+# InternalPoplitealSciaticMotorRight_Ankle_CFPI          .         
+# InternalPoplitealSciaticMotorLeft_Ankle_CFPI          -0.39611534
+# RadialSensoryRight                                     .         
+# RadialSensoryLeft                                     -0.32607547
+# MedianSensoryRight                                     .         
+# MedianSensoryLeft                                      .         
+# UlnarSensoryRight                                      .         
+# UlnarSensoryLeft                                       .         
+# MusculocutaneousSensoryRight                           .         
+# MusculocutaneousSensoryLeft                            .         
+# SuralSensitifD                                        -0.31479721
+# SuralSensoryLeft                                      -0.00492449
+# MedianVelocityRight                                   -0.09836101
+# MedianVelocityLeft                                    -0.14182843
+# MedianDistalLatencyRight                               .         
+# MedianDistalLatencyLeft                                .    
+
+
+# Predict function for glmnet models
+lasso_predictions <- predict(lasso_cv, newx = X, s = "lambda.1se")
+
+cor(lasso_predictions, data.frame(y), method="spearman")
+
+
+# Create data frames for plotting
+lasso_plot_data <- data.frame(
+  Actual = y,
+  Predicted = as.numeric(lasso_predictions)
+)
+
+
+
+# LASSO Plot
+ggplot(lasso_plot_data, aes(x = Actual, y = Predicted)) +
+  geom_abline(slope = 1, intercept = 0, linewidth=1, color = "#FAC67A") +
+  geom_jitter(alpha = 0.6, color = "#183555", shape=1, stroke=2, width = 0.3, height = 0.3) +
+  theme_minimal() +
+  xlim(-3,3) + ylim(-3,3) +
+  labs(title = "LASSO: Actual vs Predicted", x = "Actual Standardized Values", y = "Predicted Standardized Values")
+
+
+
+# ----------
