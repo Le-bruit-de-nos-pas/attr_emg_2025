@@ -2240,3 +2240,56 @@ ggplot(lasso_plot_data, aes(x = Actual, y = Predicted)) +
 
 
 # ----------
+# Drug Treatments ---------------
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+sum(is.na(df_target_vars_imputed))
+
+names(attr_emg_input)
+
+unique(df_target_vars_imputed$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date, Treatment,Traitement_change ) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+df_target_vars_imputed <- attr_emg_input %>% 
+  bind_cols(df_target_vars_imputed) %>% ungroup()
+
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(Traitement_change=ifelse(is.na(Traitement_change),0,Traitement_change))
+
+cor(df_target_vars_imputed$Traitement_change, df_target_vars_imputed$Score_Total)
+
+df_target_vars_imputed %>% group_by(Traitement_change) %>% summarise(mean=mean(Score_Total))
+
+df_target_vars_imputed %>% group_by(Treatment ) %>% count()
+
+# 1 ""            1
+# 2 "0"         124
+# 3 "1"           1
+# 4 "I"           4
+# 5 "P"         122
+# 6 "T"         163
+# 7 "T+P"        30
+# 8 "V"           8
+
+
+df_target_vars_imputed %>% group_by(Patient) %>% filter(Visite_date==min(Visite_date)) %>%
+  group_by(Treatment ) %>% count()
+
+# 1 0            48
+# 2 1             1
+# 3 P             3
+# 4 T            32
+
+# ------
