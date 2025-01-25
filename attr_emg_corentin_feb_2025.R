@@ -2704,4 +2704,25 @@ severity_changes %>% filter(Treatment!="(I) Inotersen") %>%
 
 
 
+# Create a cumulative post-treatment variable
+data <- df_target_vars_imputed %>%
+  arrange(Patient, Visite_date) %>%  # Ensure the data is sorted by Patient and Visit_date
+  group_by(Patient) %>% 
+  mutate(
+    post_treatment = cumsum(Traitement_change) > 0  # 1 after treatment is initiated, remains 1
+  ) %>%
+  ungroup()
+
+
+# Fit the ITS model (segmented regression)
+its_model <- lm(NISLL ~ Visite_date + post_treatment + Visite_date * post_treatment, data = data)
+
+# View the summary of the model
+summary(its_model)
+
+
+data %>% ggplot(aes(Visite_date, NISLL, color=post_treatment, fill=post_treatment)) +
+  geom_smooth()
+
+
 # ------
