@@ -2537,5 +2537,44 @@ plots
 
 
 
+unique(df_target_vars_imputed$Treatment)
+
+
+# Function to create boxplots for each feature
+create_boxplot <- function(feature_name) {
+  ggplot(df_target_vars_imputed, aes(x = Treatment, y = !!sym(feature_name), fill = Treatment, colour=Treatment)) +
+    geom_jitter(shape=1, stroke=2, width = 0.2, height = 0.2, size=2, alpha=0.6) +
+    geom_boxplot(position = position_dodge(width = 0.6), alpha = 0.8, notch = TRUE) +
+    labs(
+      y = paste0(feature_name, "\n"),
+      x = "\n Treatment Group",
+      title = feature_name
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 8),
+      axis.title.x = element_text(size = 12, vjust = -0.5),
+      axis.title.y = element_text(size = 12, vjust = -0.5),
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none"
+    ) +
+    scale_fill_manual(values = c("#FAC67A", "firebrick", "#183555", "#789BC4",  "#FFA559",  "gray")) +  # Customize colors for treatments
+    scale_colour_manual(values = c("#FAC67A", "firebrick", "#183555", "#789BC4",  "#FFA559",  "gray"))
+}
+
+
+
+# List of variables to loop through (adjust column indices as needed)
+feature_names <- colnames(df_target_vars_imputed)[5:ncol(df_target_vars_imputed)]  # Columns starting from 5th onwards
+
+# Generate box plots for each feature (variable)
+plots <- map(feature_names, create_boxplot)
+
+# Display the second plot as an example
+plots[[25]]
+# All plots will be stored in `plots` and can be accessed by index
+
+plots
+
 
 # ------
