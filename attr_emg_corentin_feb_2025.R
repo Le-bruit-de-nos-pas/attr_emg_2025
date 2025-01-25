@@ -2254,42 +2254,288 @@ unique(df_target_vars_imputed$Enrolled)
 
 attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
 
-
 attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date, Treatment,Traitement_change ) %>%
   mutate(Visite_date=as.Date(Visite_date)) %>%
   arrange(Patient, Visite_date) %>% group_by(Patient) %>%
   mutate(first=min(Visite_date)) %>%
   mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
 
-
 df_target_vars_imputed <- attr_emg_input %>% 
   bind_cols(df_target_vars_imputed) %>% ungroup()
+
+unique(df_target_vars_imputed$Traitement_change)
+unique(df_target_vars_imputed$Treatment)
 
 df_target_vars_imputed <- df_target_vars_imputed %>%
   mutate(Traitement_change=ifelse(is.na(Traitement_change),0,Traitement_change))
 
-cor(df_target_vars_imputed$Traitement_change, df_target_vars_imputed$Score_Total)
-
-df_target_vars_imputed %>% group_by(Traitement_change) %>% summarise(mean=mean(Score_Total))
-
-df_target_vars_imputed %>% group_by(Treatment ) %>% count()
-
-# 1 ""            1
-# 2 "0"         124
-# 3 "1"           1
-# 4 "I"           4
-# 5 "P"         122
-# 6 "T"         163
-# 7 "T+P"        30
-# 8 "V"           8
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(Treatment=ifelse(is.na(Treatment),NA,Treatment)) %>%
+  mutate(Treatment=ifelse(Treatment=="", NA, Treatment)) %>%
+  mutate(Treatment=ifelse(Treatment=="1", NA, Treatment)) 
 
 
-df_target_vars_imputed %>% group_by(Patient) %>% filter(Visite_date==min(Visite_date)) %>%
-  group_by(Treatment ) %>% count()
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(Treatment=ifelse(Treatment=="0", NA, Treatment))
+  
 
-# 1 0            48
-# 2 1             1
-# 3 P             3
-# 4 T            32
+df_target_vars_imputed <- df_target_vars_imputed %>% 
+  mutate(Treatment=ifelse(Treatment=="I", "(I) Inotersen",
+                          ifelse(Treatment=="P", "(P) Patisiran",
+                                 ifelse(Treatment=="T", "(T) Tafamidis",
+                                        ifelse(Treatment=="T+P", "(T)+(P)",
+                                               ifelse(Treatment=="V", "(V) Vutrisiran", Treatment))))))
+
+
+
+
+Treatment     n    perc
+# 1 0           126 0.27842  
+# 2 I             4 0.00883
+# 3 P           122 0.269  
+# 4 T           163 0.360  
+# 5 T+P          30 0.0662 
+# 6 V             8 0.0177 
+
+
+
+to_plot <- df_target_vars_imputed %>% group_by(Treatment ) %>% count() %>% mutate(perc=n/453)
+
+to_plot$perc_label <- paste0(round(to_plot$perc * 100, 2), "%")
+
+custom_colors <- c("#FAC67A", "#3A6EA5", "#183555", "#789BC4",  "#FFA559",  "gray")
+
+
+ggplot(to_plot, aes(x = Treatment, y = n, fill = Treatment)) +
+  geom_bar(stat = "identity", alpha=0.9) +
+  geom_text(aes(label = perc_label), vjust = -0.5, size = 4) +
+  #scale_y_continuous(labels = scales::percent_format(), expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    title = "Number|percentage of all patient-visits \nON each Treatment [n=453]",
+    x = "\n Treatment ON",
+    y = "Absolute number of all patient-visits \n"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = custom_colors) +
+  scale_colour_manual(values = custom_colors) 
+
+
+Treatment     n    perc
+
+#   1 0            49 0.5829 
+# 2 P             3 0.0357
+# 3 T            32 0.381 
+
+
+to_plot <-  df_target_vars_imputed %>% group_by(Patient) %>% filter(Visite_date==min(Visite_date)) %>%
+  group_by(Treatment ) %>% count() %>% mutate(perc=n/84)
+
+to_plot$perc_label <- paste0(round(to_plot$perc * 100, 2), "%")
+
+custom_colors <- c("#3A6EA5", "#183555",  "gray")
+
+
+ggplot(to_plot, aes(x = Treatment, y = n, fill = Treatment)) +
+  geom_bar(stat = "identity", alpha=0.9) +
+  geom_text(aes(label = perc_label), vjust = -0.5, size = 4) +
+  #scale_y_continuous(labels = scales::percent_format(), expand = expansion(mult = c(0, 0.1))) +
+  labs(
+    title = "Number|percentage of the 1st patient-visits \nON each Treatment [n=84]",
+    x = "\n Treatment ON",
+    y = "Absolute number of 1st patient-visits \n"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = custom_colors) +
+  scale_colour_manual(values = custom_colors) 
+
+
+first_visits <- df_target_vars_imputed %>% group_by(Patient) %>% filter(Visite_date==min(Visite_date))
+
+
+# Select the variables from NISLL onwards
+variables_to_plot <- names(first_visits)[which(names(first_visits) == "NISLL"):ncol(first_visits)]
+
+constant_vars <- variables_to_plot[sapply(first_visits[variables_to_plot], function(x) sd(x, na.rm = TRUE) == 0)]
+
+print(constant_vars)
+
+scale(first_visits$NISLL)
+
+# Scale continuous variables (optional)
+data_scaled <- first_visits
+
+for (var in variables_to_plot) {
+  data_scaled[[var]] <- scale(first_visits[[var]])
+}
+
+# Calculate mean and SD for each variable by treatment group
+summary_data <- data_scaled %>%
+  pivot_longer(cols = all_of(variables_to_plot), names_to = "Variable", values_to = "Value") %>%
+  group_by(Treatment, Variable) %>%
+  summarize(
+    Mean = mean(Value, na.rm = TRUE),
+    SD = sd(Value, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Create the forest plot
+ggplot(summary_data, aes(x = Mean, y = Variable, color = Treatment)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbarh(aes(xmin = Mean - SD, xmax = Mean + SD), 
+                 height = 0.4, 
+                 position = position_dodge(width = 0.5)) +
+  labs(
+    title = "Forest Plot of Mean ± SD for \nClinical|Electromyographic Variables by Treatment",
+    x = "\n Mean ± SD (Scaled Values)",
+    y = "Clinical|Electromyographic Variable \n"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+
+
+custom_colors <- c("#183555", "firebrick",  "gray")
+
+ggplot(summary_data, aes(x = Mean, y = Variable, color = Treatment)) +
+  # Thicker error bars using geom_segment
+  geom_segment(aes(x = Mean - SD, xend = Mean + SD, y = Variable, yend = Variable),
+               size = 1, position = position_dodge(width = 0.4), alpha=0.6) +
+  # Add points for the means
+  geom_point(position = position_dodge(width = 0.4), size = 2) +
+  labs(
+    title = "Forest Plot of Mean ± SD for \nClinical|Electromyographic Variables by Treatment",
+    x = "\n Mean ± SD (Scaled Values)",
+    y = "Clinical|Electromyographic Variable \n"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  scale_fill_manual(values = custom_colors) +
+  scale_colour_manual(values = custom_colors) 
+
+
+ggplot(summary_data, aes(x = Treatment, y = Mean, color = Treatment)) +
+  # Box plot for each treatment group
+  geom_boxplot(aes(group = Treatment), 
+               position = position_dodge(width = 0.6), 
+               alpha = 0.4) +
+  # Add points for the means (to overlay over the box plots)
+  geom_point(aes(x = Treatment, y = Mean), 
+             size = 3, 
+             color = "black", 
+             position = position_dodge(width = 0.6)) +
+  labs(
+    title = "Box Plot of Mean ± SD for \nClinical|Electromyographic Variables by Treatment",
+    x = "\n Treatment",
+    y = "Clinical|Electromyographic Variable \n"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  scale_fill_manual(values = custom_colors) +
+  scale_colour_manual(values = custom_colors)
+
+
+
+# Reshape the data into long format for ggplot
+data_long <- data_scaled %>%
+  pivot_longer(cols = all_of(variables_to_plot),  # Adjust with the correct variables
+               names_to = "Variable",
+               values_to = "Value") %>%
+  filter(!is.na(Value))  # Remove any NA values if present
+
+
+custom_colors <- c("#FAC67A", "#183555",  "gray")
+
+
+# Create the box plots
+ggplot(data_long, aes(x = Treatment, y = Value, fill = Treatment)) +
+  # Box plot for each variable
+  geom_boxplot(position = position_dodge(width = 0.6), alpha = 0.95, notch = T) +
+  facet_wrap(~Variable, scales = "free_y") +  # Create separate boxplots for each variable
+  labs(
+    title = "Scaled Clinical|Electromyographic Variables Variables by Treatment",
+    x = "\nTreatment",
+    y = "Scaled Values \n"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  scale_fill_manual(values = custom_colors) +
+  scale_colour_manual(values = custom_colors) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "bottom") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+       # strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 12, vjust = -0.5),
+        axis.title.y = element_text(size = 12, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) 
+
+
+
+
+
+
+# Function to create boxplots for each feature
+create_boxplot <- function(feature_name) {
+  ggplot(first_visits, aes(x = Treatment, y = !!sym(feature_name), fill = Treatment, colour=Treatment)) +
+    geom_jitter(shape=1, stroke=2, width = 0.2, height = 0.2, size=2, alpha=0.6) +
+    geom_boxplot(position = position_dodge(width = 0.6), alpha = 0.8, notch = TRUE) +
+    labs(
+      y = paste0(feature_name, "\n"),
+      x = "\n Treatment Group",
+      title = feature_name
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 8),
+      axis.title.x = element_text(size = 12, vjust = -0.5),
+      axis.title.y = element_text(size = 12, vjust = -0.5),
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none"
+    ) +
+    scale_fill_manual(values = c("firebrick", "#183555", "lightgray")) +  # Customize colors for treatments
+    scale_colour_manual(values = c("firebrick", "#183555", "lightgray"))
+}
+
+
+# List of variables to loop through (adjust column indices as needed)
+feature_names <- colnames(first_visits)[5:ncol(first_visits)]  # Columns starting from 5th onwards
+
+# Generate box plots for each feature (variable)
+plots <- map(feature_names, create_boxplot)
+
+# Display the second plot as an example
+plots[[25]]
+# All plots will be stored in `plots` and can be accessed by index
+
+plots
+
+
+
+
+
 
 # ------
