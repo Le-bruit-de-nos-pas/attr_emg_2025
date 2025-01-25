@@ -2577,4 +2577,66 @@ plots[[25]]
 plots
 
 
+to_plot <- df_target_vars_imputed %>% select(Patient, Visite_date, Treatment) %>% mutate(exp=1) %>%
+  distinct() %>%
+  spread(key=Treatment, value=exp) %>%
+  mutate(`(P) Patisiran`=ifelse(is.na(`(T)+(P)`), `(P) Patisiran`, 1)) %>%
+  mutate(`(T) Tafamidis`=ifelse(is.na(`(T)+(P)`), `(T) Tafamidis`, 1)) %>%
+  select(-`<NA>`) 
+
+to_plot[is.na(to_plot)] <- 0
+
+to_plot <- to_plot %>% group_by(Patient) %>%
+  mutate(`(I) Inotersen`=cumsum(`(I) Inotersen`)) %>% mutate(`(I) Inotersen`=ifelse(`(I) Inotersen`==0,0,1)) %>%
+  mutate(`(P) Patisiran`=cumsum(`(P) Patisiran`)) %>% mutate(`(P) Patisiran`=ifelse(`(P) Patisiran`==0,0,1)) %>%
+  mutate( `(T) Tafamidis`=cumsum( `(T) Tafamidis`)) %>% mutate(`(T) Tafamidis`=ifelse( `(T) Tafamidis`==0,0,1)) %>%
+  mutate(`(V) Vutrisiran`=cumsum(`(V) Vutrisiran`)) %>% mutate(`(V) Vutrisiran`=ifelse(`(V) Vutrisiran`==0,0,1)) %>%
+  select(-`(T)+(P)`)
+
+
+all_dates <- to_plot %>%
+  pull(Visite_date) %>%
+  unique() %>%
+  sort()
+
+expanded_data <- to_plot %>% ungroup() %>%
+  complete(Patient, Visite_date = all_dates) %>%
+  arrange(Patient, Visite_date)
+
+expanded_data_filled <- expanded_data %>%
+  group_by(Patient) %>%
+  fill(`(I) Inotersen`, `(P) Patisiran`, `(T) Tafamidis` ,`(V) Vutrisiran`, .direction = "down") %>%
+  ungroup()
+
+cumulative_data <- expanded_data_filled %>%
+  mutate(
+    on_inotersen = `(I) Inotersen` > 0,
+    on_patisiran = `(P) Patisiran` > 0,
+    on_tafamidis = `(T) Tafamidis` > 0,
+    on_vutrisiran = `(V) Vutrisiran` > 0
+  ) %>%
+  group_by(Visite_date) %>%
+  summarise(
+    cumulative_inotersen = sum(on_inotersen),
+    cumulative_patisiran = sum(on_patisiran),
+    cumulative_tafamidis = sum(on_tafamidis),
+    cumulative_vutrisiran = sum(on_vutrisiran)
+  ) %>%
+  ungroup()
+
+
+ggplot(cumulative_data, aes(x = Visite_date)) +
+  geom_line(aes(y = 100*cumulative_inotersen/84, color = "Inotersen"), size = 2) +
+  geom_line(aes(y = 100*cumulative_patisiran/84, color = "Patisiran"), size = 2) +
+  geom_line(aes(y = 100*cumulative_tafamidis/84, color = "Tafamidis"), size = 2) +
+  geom_line(aes(y = 100*cumulative_vutrisiran/84, color = "Vutrisiran"), size = 2) +
+  labs(
+    title = "Cumulative % Patients \nWho Have Been ON Each Drug Over Time",
+    x = "\n Visit Date [Elapsed Time From Baseline]]",
+    y = "Cumulative Patient Percentage (%) \n",
+    color = "Drug"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("#FAC67A", "firebrick", "#183555", "#789BC4")) +  # Customize colors for treatments
+  scale_colour_manual(values = c("#FAC67A", "firebrick", "#183555", "#789BC4"))
 # ------
