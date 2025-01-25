@@ -2639,4 +2639,69 @@ ggplot(cumulative_data, aes(x = Visite_date)) +
   theme_minimal() +
   scale_fill_manual(values = c("#FAC67A", "firebrick", "#183555", "#789BC4")) +  # Customize colors for treatments
   scale_colour_manual(values = c("#FAC67A", "firebrick", "#183555", "#789BC4"))
+
+
+
+
+
+
+data_with_change <- df_target_vars_imputed %>%
+  arrange(Patient, Visite_date) %>%
+  group_by(Patient) %>%
+  mutate(
+    previous_NISLL = lag(NISLL), # Severity score before the visit
+    previous_FAP = lag(FAP),    # Severity score before the visit
+    treatment_initiated = ifelse(Traitement_change == 1, 1, 0)
+  ) %>%
+  ungroup()
+
+
+patients_on_treatment <- data_with_change %>%
+  filter(treatment_initiated == 1)
+
+
+severity_changes <- patients_on_treatment %>%
+  filter(!is.na(previous_NISLL)) %>%
+  mutate(
+    change_in_NISLL = NISLL - previous_NISLL,
+    change_in_FAP = FAP - previous_FAP
+  )
+
+
+mean(severity_changes$change_in_NISLL)
+t.test(severity_changes$change_in_NISLL)
+mean(severity_changes$change_in_FAP)
+t.test(severity_changes$change_in_FAP)
+
+severity_changes %>% filter(Treatment!="(I) Inotersen") %>%
+  ggplot(aes(change_in_NISLL, colour=Treatment, fill=Treatment)) +
+  geom_density( alpha = 0.75, adjust=2, size=2) +
+  labs(
+    title = "Change in NISLL Scores Before and After Treatment Initiation",
+    x = "\n NISLL Change From Pre-Treatment Initiation",
+    y = "Patient density (Gaussian Kernel) \n"
+  ) +
+  theme_minimal() +
+  #facet_wrap(~Treatment ) +
+  scale_fill_manual(values = c( "firebrick", "#183555", "#FAC67A",  "gray")) +  # Customize colors for treatments
+  scale_colour_manual(values = c( "firebrick", "#183555","#FAC67A",  "gray"))
+
+
+
+severity_changes %>% filter(Treatment!="(I) Inotersen") %>%
+  ggplot(aes(change_in_FAP, colour=Treatment, fill=Treatment)) +
+  geom_density( alpha = 0.75, adjust=2, size=2) +
+  labs(
+    title = "Change in NISLL Scores Before and After Treatment Initiation",
+    x = "\n NISLL Change From Pre-Treatment Initiation",
+    y = "Patient density (Gaussian Kernel) \n"
+  ) +
+  theme_minimal() +
+  #facet_wrap(~Treatment ) +
+  scale_fill_manual(values = c( "firebrick", "#183555", "#FAC67A",  "gray")) +  # Customize colors for treatments
+  scale_colour_manual(values = c( "firebrick", "#183555","#FAC67A",  "gray"))
+
+
+
+
 # ------
