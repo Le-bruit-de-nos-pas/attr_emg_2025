@@ -2726,3 +2726,62 @@ data %>% ggplot(aes(Visite_date, NISLL, color=post_treatment, fill=post_treatmen
 
 
 # ------
+# Best Subset NISLL get coeficients ----------
+
+
+library(leaps)
+library(glmnet)
+library(car)
+
+df_target_vars_imputed <- fread( "../data/df_target_vars_imputed.txt")
+
+df_target_vars_imputed <- df_target_vars_imputed %>% select(-c(FAP,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+
+
+# Ensure predictors are scaled
+#df_target_vars_imputed <- df_target_vars_imputed %>%
+#  mutate(across(where(is.numeric), scale))
+
+
+#Best Subset Selection
+set.seed(1)
+
+
+regit_full <- regsubsets(NISLL  ~ ., data = df_target_vars_imputed, nvmax = 22, really.big=T)
+
+reg_summary <- summary(regit_full)
+
+
+library(leaps)
+
+# Get the best model of each size
+best_model_vars <- summary(regit_full)$which
+
+# Initialize a list to store coefficients
+coef_list <- list()
+
+# Loop through different model sizes
+for (i in 1:nrow(best_model_vars)) {
+  selected_vars <- names(best_model_vars[i, ])[best_model_vars[i, ] == TRUE]
+  formula_str <- paste("NISLL ~", paste(selected_vars[-1], collapse = " + "))  # Exclude intercept
+  
+  model <- lm(as.formula(formula_str), data = df_target_vars_imputed)
+  
+  coef_list[[paste0("Model_", i)]] <- coef(model)  # Store coefficients
+}
+
+# View coefficients for each model
+coef_list
+
+coef_values <- lapply(coef_list, function(x) as.numeric(x))
+
+
+jsonlite::write_json(coef_values, "model_coefficients.json", auto_unbox = TRUE, pretty = TRUE)
+
+# Extract just the variable names
+coef_names <- lapply(coef_list, function(x) names(x))
+
+# Save variable names as JSON
+jsonlite::write_json(coef_names, "model_variables.json", auto_unbox = TRUE, pretty = TRUE)
+
+# ----------
