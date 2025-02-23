@@ -2785,3 +2785,93 @@ coef_names <- lapply(coef_list, function(x) names(x))
 jsonlite::write_json(coef_names, "model_variables.json", auto_unbox = TRUE, pretty = TRUE)
 
 # ----------
+# Process data for deep learning ---------
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+attr_emg_input <- attr_emg_input %>%
+  mutate(Treatment=ifelse(is.na(Treatment),NA,Treatment)) %>%
+  mutate(Treatment=ifelse(Treatment=="", NA, Treatment)) %>%
+  mutate(Treatment=ifelse(Treatment=="1", NA, Treatment)) 
+
+
+attr_emg_input <- attr_emg_input %>%
+  mutate(Treatment=ifelse(Treatment=="0", NA, Treatment))
+  
+
+attr_emg_input <- attr_emg_input %>% 
+  mutate(Treatment=ifelse(Treatment=="I", "Inotersen",
+                          ifelse(Treatment=="P", "Patisiran",
+                                 ifelse(Treatment=="T", "Tafamidis",
+                                        ifelse(Treatment=="T+P", "T_plus_P",
+                                               ifelse(Treatment=="V", "Vutrisiran", Treatment))))))
+
+
+
+attr_emg_input %>% group_by(Treatment) %>% count()
+
+attr_emg_input <- attr_emg_input %>% mutate(Treatment=ifelse(Treatment=="TH", "none",
+                                           ifelse(is.na(Treatment), "none", Treatment)))
+
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+sum(is.na(df_target_vars_imputed))
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date, Treatment) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date, Treatment) %>%
+  bind_cols(df_target_vars_imputed)
+
+sum(is.na(df_target_vars_imputed))
+
+sum(is.na(df_target_vars_imputed$Treatment))
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% mutate(Treatment=ifelse(is.na(Treatment), "none", Treatment))
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% drop_na()
+
+df <- df_target_vars_imputed
+
+df <- df %>% select(-c(FAP, Score_Total, Score_Hemi_Right, Score_UlnSPI))
+
+unique(df$Treatment)
+
+df <- df %>% ungroup() %>%
+  mutate(Exp=1) %>%
+   spread(key=Treatment, value=Exp)
+
+df[is.na(df)] <- 0
+
+df <- df %>% select(-none)
+
+names(df)
+
+df <- df %>% mutate(Patisiran=ifelse(T_plus_P==1,1,Patisiran)) %>%
+  mutate(Tafamidis=ifelse(T_plus_P==1,1,Tafamidis)) %>% select(-T_plus_P)
+  
+# Normalize numerical variables (NISLL & EMG features)
+# num_vars <- names(df)[!(names(df) %in% c("Patient", "Visite_date", "Inotersen", "Patisiran", "Tafamidis", "Vutrisiran"))]  # Exclude categorical vars
+# preproc <- caret::preProcess(df[num_vars], method = c("center", "scale"))  # Normalize
+# df[num_vars] <- predict(preproc, df[num_vars])
+
+# Ensure data is sorted by Patient and Visit_date
+df <- df %>%
+  arrange(Patient, Visite_date   )
+
+
+write.csv(df, "processed_data.csv", row.names = FALSE)
+
+
+# -----------
