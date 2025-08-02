@@ -3044,3 +3044,345 @@ all_fixed_effects %>% filter(Term!="(Intercept)") %>% select(-c(Term, Variable))
 data.frame(all_fixed_effects$BH)
 
 # -----------
+# Classfy patients as up down flat like the PT paper -----------
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+sum(is.na(df_target_vars_imputed))
+
+names(attr_emg_input)
+
+unique(df_target_vars_imputed$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed) %>% ungroup()
+
+
+
+var_to_track <- "NISLL"
+
+df_target_vars_imputed <- df_target_vars_imputed %>% mutate(Visite_date=Visite_date/30.44) %>% filter(!is.na(Visite_date))
+
+# Calculate per-patient linear trend (slope)
+trend_df <- df_target_vars_imputed %>% 
+  group_by(Patient) %>%
+  summarise(
+    slope = coef(lm(get(var_to_track) ~ Visite_date ))[2],
+    .groups = "drop"
+  )
+# 
+# df_target_vars_imputed <- df_target_vars_imputed %>% group_by(Patient) %>% count() %>%
+#   filter(n>=6) %>% select(Patient) %>% 
+#   left_join(df_target_vars_imputed) %>% ungroup()
+
+# Define number of points to use for early/late trend
+early_n <- 2
+late_n <- 2
+
+slopes_df <- df_target_vars_imputed %>%
+  group_by(Patient) %>%
+  arrange(Visite_date) %>%
+  mutate(row_id = row_number()) %>%
+  mutate(total_n = n()) %>%
+  mutate(
+    early = row_id <= early_n,
+    late = row_id > total_n - late_n
+  ) %>%
+  group_by(Patient) %>%
+  summarise(
+    early_slope = if (sum(early) >= 2) coef(lm(get(var_to_track)[early] ~ Visite_date[early]))[2] else NA_real_,
+    late_slope  = if (sum(late) >= 2) coef(lm(get(var_to_track)[late]  ~ Visite_date[late]))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+# Threshold to define "flat"
+flat_threshold <- 0.5
+
+slopes_df <- slopes_df %>%
+  mutate(
+    early_trend = case_when(
+      is.na(early_slope) ~ NA_character_,
+      early_slope > flat_threshold  ~ "up",
+      early_slope < -flat_threshold ~ "down",
+      TRUE ~ "flat"
+    ),
+    late_trend = case_when(
+      is.na(late_slope) ~ NA_character_,
+      late_slope > flat_threshold  ~ "up",
+      late_slope < -flat_threshold ~ "down",
+      TRUE ~ "flat"
+    )
+  )
+
+
+table(slopes_df$early_trend, slopes_df$late_trend)
+
+slopes_df %>% group_by(late_trend) %>% count()
+
+
+
+
+
+
+
+
+
+
+
+names(df_target_vars_imputed)
+
+var_to_track <- "Score_UlnSPI"
+
+
+# Calculate per-patient linear trend (slope)
+trend_df_Score_UlnSPI <- df_target_vars_imputed %>% 
+  group_by(Patient) %>%
+  summarise(
+    slope = coef(lm(get(var_to_track) ~ Visite_date ))[2],
+    .groups = "drop"
+  )
+
+
+# Define number of points to use for early/late trend
+early_n <- 2
+late_n <- 2
+
+slopes_df_Score_UlnSPI <- df_target_vars_imputed %>%
+  group_by(Patient) %>%
+  arrange(Visite_date) %>%
+  mutate(row_id = row_number()) %>%
+  mutate(total_n = n()) %>%
+  mutate(
+    early = row_id <= early_n,
+    late = row_id > total_n - late_n
+  ) %>%
+  group_by(Patient) %>%
+  summarise(
+    early_slope = if (sum(early) >= 2) coef(lm(get(var_to_track)[early] ~ Visite_date[early]))[2] else NA_real_,
+    late_slope  = if (sum(late) >= 2) coef(lm(get(var_to_track)[late]  ~ Visite_date[late]))[2] else NA_real_,
+    .groups = "drop"
+  )
+
+# Threshold to define "flat"
+flat_threshold <- 1
+
+slopes_df_Score_UlnSPI <- slopes_df_Score_Total %>%
+  mutate(
+    early_trend = case_when(
+      is.na(early_slope) ~ NA_character_,
+      early_slope > flat_threshold  ~ "up",
+      early_slope < -flat_threshold ~ "down",
+      TRUE ~ "flat"
+    ),
+    late_trend = case_when(
+      is.na(late_slope) ~ NA_character_,
+      late_slope > flat_threshold  ~ "up",
+      late_slope < -flat_threshold ~ "down",
+      TRUE ~ "flat"
+    )
+  )
+
+
+table(slopes_df_Score_UlnSPI$early_trend, slopes_df_Score_UlnSPI$late_trend)
+
+slopes_df_Score_UlnSPI %>% group_by(late_trend) %>% count()
+
+test <- slopes_df_Score_UlnSPI %>% select(Patient, early_slope) %>% rename("Score_UlnSPI_early_slope"="early_slope") %>%
+  inner_join(slopes_df %>% select(Patient, late_slope)) %>% drop_na() 
+  
+cor.test(test$Score_UlnSPI_early_slope, test$late_slope)
+
+test %>% ggplot(aes(Score_UlnSPI_early_slope, NISLL)) +
+  geom_smooth() +
+  xlim(-10,10)
+
+
+
+
+# ---------
+
+#  Correlate NISLL with previous lag EMGs ------------
+
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+sum(is.na(df_target_vars_imputed))
+
+names(attr_emg_input)
+
+unique(df_target_vars_imputed$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed) %>% ungroup()
+
+
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+names(df_target_vars_imputed)
+
+test <- df_target_vars_imputed %>% select(Patient, Visite_date, NISLL, Score_Total) %>%
+  group_by(Patient) %>% mutate(Visite_date=row_number())
+
+
+
+
+expanded <- test %>%
+  rename(NISLL_time = Visite_date, NISLL_value = NISLL) %>%
+  inner_join(
+    test %>% select(Patient, Score_Time = Visite_date, Score_Total),
+    by = "Patient"
+  ) %>%
+  filter(Score_Time <= NISLL_time) %>%
+  mutate(lag = NISLL_time - Score_Time)
+
+
+cor_test_by_lag %>%
+  mutate(p.sig = ifelse(p.value <= 0.05, "Sig", "Not")) %>%
+  ggplot(aes(x = lag, y = estimate, colour = p.sig)) +
+  geom_ribbon(aes(x = lag, ymin = conf.low, ymax = conf.high),
+              inherit.aes = FALSE,
+              fill = "gray80",
+              alpha = 0.4) +
+  geom_line(color = "gray") +
+  geom_point(size = 3, shape=1, stroke=3) +
+  scale_color_manual(values = c("Sig" = "#2D5675", "Not" = "#B03C25")) +
+  ggpubr::theme_pubclean() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#2D5675") +
+  labs(
+    title = "Correlation between NISLL and preceding(s) Score_Total",
+    subtitle = "Each point is a correlation at a given 6-month visit lag \nColored by p-value based significance",
+    x = "\n VISIT LAG \n (How many 6-month visits before was Score_Total assessed?)",
+    y = "Correlation coefficient (r) \n",
+    colour = "Significance"
+  )
+
+
+
+
+# List of variables to analyze
+target_vars <- c(
+  "MedianMotorRight_Wrist_ThumbAbduction",
+  "MedianMotorLeft_Wrist_ThumbAbduction",
+  "UlnarMotorRight_Wrist_FingerAdduction",
+  "UlnarMotorLeft_Wrist_FingerAdduction",
+  "ExternalPoplitealSciaticMotorRight_Foot_DorsalisPedis",
+  "ExternalPoplitealSciaticMotorLeft_Foot_DorsalisPedis",
+  "InternalPoplitealSciaticMotorRight_Ankle_CFPI",
+  "InternalPoplitealSciaticMotorLeft_Ankle_CFPI",
+  "RadialSensoryRight",
+  "RadialSensoryLeft",
+  "MedianSensoryRight",
+  "MedianSensoryLeft",
+  "UlnarSensoryRight",
+  "UlnarSensoryLeft",
+  "MusculocutaneousSensoryRight",
+  "MusculocutaneousSensoryLeft",
+  "SuralSensitifD",
+  "SuralSensoryLeft",
+  "MedianVelocityRight",
+  "MedianVelocityLeft",
+  "MedianDistalLatencyRight",
+  "MedianDistalLatencyLeft",
+  "Score_Total",
+  "Score_Hemi_Right",
+  "Score_UlnSPI"
+)
+
+
+ test <- df_target_vars_imputed %>% 
+  group_by(Patient) %>% mutate(Visite_date=row_number()) %>% filter(Visite_date<=10) 
+
+# Prep data: sequential visit index per patient
+test_base <- test %>%
+  select(Patient, Visite_date, NISLL, all_of(target_vars)) %>%
+  group_by(Patient) %>%
+  mutate(Visite_date = row_number()) %>%
+  ungroup()
+
+
+# Loop over each variable
+walk(target_vars, function(varname) {
+  
+  message("Processing: ", varname)
+  
+  # Expand: pair NISLL with all earlier values of current variable
+  expanded <- test_base %>%
+    rename(NISLL_time = Visite_date, NISLL_value = NISLL) %>%
+    inner_join(
+      test_base %>% select(Patient, Score_Time = Visite_date, score_value = all_of(varname)),
+      by = "Patient"
+    ) %>%
+    filter(Score_Time <= NISLL_time) %>%
+    mutate(lag = NISLL_time - Score_Time)
+  
+  # Compute correlation per lag with cor.test
+  cor_test_by_lag <- expanded %>%
+    group_by(lag) %>%
+    summarise(
+      result = list(cor.test(NISLL_value, score_value, use = "complete.obs")),
+      n = n(),
+      .groups = "drop"
+    ) %>%
+    mutate(tidy_result = map(result, broom::tidy)) %>%
+    unnest(tidy_result) %>%
+    select(lag, n, estimate, p.value, conf.low, conf.high)
+  
+  # Plot with CI and significance
+  plot <- cor_test_by_lag %>%
+    mutate(p.sig = ifelse(p.value <= 0.05, "Sig", "Not")) %>%
+    ggplot(aes(x = lag, y = estimate, colour = p.sig)) +
+    geom_ribbon(aes(x = lag, ymin = conf.low, ymax = conf.high),
+                inherit.aes = FALSE,
+                fill = "gray80", alpha = 0.4) +
+    geom_line(color = "gray") +
+    geom_point(size = 3, shape = 1, stroke = 3) +
+    scale_color_manual(values = c("Sig" = "#2D5675", "Not" = "#B03C25")) +
+    ggpubr::theme_pubclean() +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#2D5675") +
+    ylim(-1,1) +
+    labs(
+      title = paste("Correlation between NISLL and preceding(s)", varname),
+      x = "\n VISIT LAG \n (How many 6-month visits before was the EMG assessed?)",
+      y = "Correlation coefficient (r) \n",
+      colour = "Significance"
+    )
+  
+  # Save as 5x5 inch SVG
+  ggsave(filename = paste0("cor_lag_", varname, ".svg"),
+         plot = plot,
+         width = 7,
+         height = 7,
+         units = "in")
+})
+
+
+# --------
