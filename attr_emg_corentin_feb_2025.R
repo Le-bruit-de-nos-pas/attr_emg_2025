@@ -3386,3 +3386,409 @@ walk(target_vars, function(varname) {
 
 
 # --------
+# Linear Mixed-effects Models - Imputed - Change Over Time  SUM OF MOTOR AND SUM OF SENSITIVE ---------------
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+sum(is.na(df_target_vars_imputed))
+
+names(df_target_vars_imputed)
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% 
+  mutate(Sum_Motor_Scores=
+           MedianMotorRight_Wrist_ThumbAbduction+
+           MedianMotorLeft_Wrist_ThumbAbduction+
+           UlnarMotorRight_Wrist_FingerAdduction+
+           UlnarMotorLeft_Wrist_FingerAdduction+
+           ExternalPoplitealSciaticMotorRight_Foot_DorsalisPedis+
+           ExternalPoplitealSciaticMotorLeft_Foot_DorsalisPedis+
+           InternalPoplitealSciaticMotorRight_Ankle_CFPI+
+           InternalPoplitealSciaticMotorLeft_Ankle_CFPI) %>%
+  mutate(Sum_Sensitive_Scores=
+           RadialSensoryRight+
+           RadialSensoryLeft+
+           MedianSensoryRight+
+           MedianSensoryLeft+
+           UlnarSensoryRight+
+           UlnarSensoryLeft+
+           MusculocutaneousSensoryRight+
+           MusculocutaneousSensoryLeft+
+           SuralSensitifD+
+           SuralSensoryLeft) %>%
+  select(NISLL, FAP, Sum_Sensitive_Scores, Sum_Motor_Scores)
+
+
+
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed)
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% ungroup()
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>%
+  mutate(across(where(is.numeric), scale))
+
+
+library(lme4)
+
+
+df <- df_target_vars_imputed
+
+emg_vars <- paste0(names(df_target_vars_imputed)[3:])
+
+
+# Fit models for each variable and store results
+results <- list()
+
+for (emg_var in emg_vars) {
+  # Fit the mixed-effects model
+  model <- lmer(as.formula(paste(emg_var, "~ Visite_date + (Visite_date | Patient )")), data = df)
+  
+  # Save the model summary
+  results[[emg_var]] <- summary(model)
+}
+
+
+
+
+
+
+
+emg_vars <- paste0(names(df_target_vars_imputed)[3:6])
+
+results <- list()
+
+for (emg_var in emg_vars) {
+  # Fit the model
+  model <- lmer(as.formula(paste(emg_var, "~ Visite_date + (Visite_date | Patient)")), data = df)
+  
+  # Extract fixed effects
+  summary_model <- summary(model)
+  fixed_effects <- data.frame(
+    Variable = emg_var,
+    Term = rownames(summary_model$coefficients),
+    Estimate = summary_model$coefficients[, "Estimate"],
+    StdError = summary_model$coefficients[, "Std. Error"],
+    tValue = summary_model$coefficients[, "t value"],
+    pValue = 2 * pt(-abs(summary_model$coefficients[, "t value"]), 
+                    df = nrow(df) - length(fixef(model)))
+  )
+  
+  # Store results
+  results[[emg_var]] <- fixed_effects
+}
+
+# Combine all results into a single data frame
+all_fixed_effects <- do.call(rbind, results)
+
+print(all_fixed_effects)
+
+# Assume 'p_values' is your vector of p-values
+adjusted_pvalues_bonferroni <- p.adjust(all_fixed_effects$pValue, method = "bonferroni")
+adjusted_pvalues_holm <- p.adjust(all_fixed_effects$pValue, method = "holm")
+adjusted_pvalues_bh <- p.adjust(all_fixed_effects$pValue, method = "BH")  # Benjamini-Hochberg
+
+# Add adjusted p-values to your results data frame
+all_fixed_effects$Bonferroni <- adjusted_pvalues_bonferroni
+all_fixed_effects$Holm <- adjusted_pvalues_holm
+all_fixed_effects$BH <- adjusted_pvalues_bh
+
+
+all_fixed_effects %>% filter(Term=="Visite_date")
+
+# -----------
+# Plot over time SUM OF MOTOR AND SUM OF SENSITIVE ---------
+
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+names(attr_emg_input)
+
+unique(attr_emg_input$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+sum(is.na(df_target_vars_imputed))
+
+names(df_target_vars_imputed)
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% 
+  mutate(Sum_Motor_Scores=
+           MedianMotorRight_Wrist_ThumbAbduction+
+           MedianMotorLeft_Wrist_ThumbAbduction+
+           UlnarMotorRight_Wrist_FingerAdduction+
+           UlnarMotorLeft_Wrist_FingerAdduction+
+           ExternalPoplitealSciaticMotorRight_Foot_DorsalisPedis+
+           ExternalPoplitealSciaticMotorLeft_Foot_DorsalisPedis+
+           InternalPoplitealSciaticMotorRight_Ankle_CFPI+
+           InternalPoplitealSciaticMotorLeft_Ankle_CFPI) %>%
+  mutate(Sum_Sensitive_Scores=
+           RadialSensoryRight+
+           RadialSensoryLeft+
+           MedianSensoryRight+
+           MedianSensoryLeft+
+           UlnarSensoryRight+
+           UlnarSensoryLeft+
+           MusculocutaneousSensoryRight+
+           MusculocutaneousSensoryLeft+
+           SuralSensitifD+
+           SuralSensoryLeft) %>%
+  select(NISLL, FAP, Sum_Sensitive_Scores, Sum_Motor_Scores)
+
+
+
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed)
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% ungroup()
+
+
+
+
+df_target_vars_imputed %>%
+  ggplot(aes(x = Visite_date, y=Sum_Sensitive_Scores )) +
+  geom_line(aes(group=Patient), size=1, alpha=0.2, ) +
+  geom_jitter(  alpha=0.4, shape=1, stroke=2, width = 0.3, height = 0.3, size=1) +
+  stat_smooth(method="loess",  alpha=0.4, lwd=1.5, se=TRUE, colour="#FAC67A", fill="#FAC67A")+
+  theme_minimal() +
+  labs(y = "Sum of Sensitive Scores (uV) \n", x="\n Elapsed Number of Days Since 1st Eval" ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "right") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 12, vjust = -0.5),
+        axis.title.y = element_text(size = 12, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) 
+
+
+
+
+df_target_vars_imputed %>%
+  ggplot(aes(x = Visite_date, y=Sum_Motor_Scores )) +
+  geom_line(aes(group=Patient), size=1, alpha=0.2, ) +
+  geom_jitter(  alpha=0.4, shape=1, stroke=2, width = 0.3, height = 0.3, size=1) +
+  stat_smooth(method="loess",  alpha=0.4, lwd=1.5, se=TRUE, colour="#183555", fill="#183555")+
+  theme_minimal() +
+  labs(y = "Sum of Motor Scores (mV) \n", x="\n Elapsed Number of Days Since 1st Eval" ) +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "right") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 12, vjust = -0.5),
+        axis.title.y = element_text(size = 12, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) 
+
+
+
+cor.test(df_target_vars_imputed$NISLL, df_target_vars_imputed$Sum_Motor_Scores, method = "spearman")
+
+
+# Spearman's rank correlation rho
+# 
+# data:  df_target_vars_imputed$NISLL and df_target_vars_imputed$Sum_Motor_Scores
+# S = 29033370, p-value < 0.00000000000000022
+# alternative hypothesis: true rho is not equal to 0
+# sample estimates:
+#        rho 
+# -0.8739423 
+
+
+cor.test(df_target_vars_imputed$NISLL, df_target_vars_imputed$Sum_Sensitive_Scores, method = "spearman")
+
+
+# Spearman's rank correlation rho
+# 
+# data:  df_target_vars_imputed$NISLL and df_target_vars_imputed$Sum_Sensitive_Scores
+# S = 28621673, p-value < 0.00000000000000022
+# alternative hypothesis: true rho is not equal to 0
+# sample estimates:
+#        rho 
+# -0.8473696 
+# 
+# Warning message:
+# In cor.test.default(df_target_vars_imputed$NISLL, df_target_vars_imputed$Sum_Sensitive_Scores,  :
+#   Cannot compute exact p-value with ties
+
+
+# -----------
+
+#  Correlate NISLL with previous lag EMGs  SUM OF MOTOR AND SUM OF SENSITIVE ------------
+
+
+
+attr_emg_input <- fread("../data/attr_emg_input.txt")
+
+df_target_vars_imputed <- fread("../data/df_target_vars_imputed.txt")
+
+sum(is.na(df_target_vars_imputed))
+
+names(attr_emg_input)
+
+unique(df_target_vars_imputed$Enrolled)
+
+attr_emg_input <- attr_emg_input %>% filter(is.na(Enrolled))
+
+attr_emg_input <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  mutate(Visite_date=as.Date(Visite_date)) %>%
+  arrange(Patient, Visite_date) %>% group_by(Patient) %>%
+  mutate(first=min(Visite_date)) %>%
+  mutate(Visite_date=as.numeric(Visite_date-min(Visite_date))) %>% select(-first)
+
+
+
+df_target_vars_imputed <- df_target_vars_imputed %>% 
+  mutate(Sum_Motor_Scores=
+           MedianMotorRight_Wrist_ThumbAbduction+
+           MedianMotorLeft_Wrist_ThumbAbduction+
+           UlnarMotorRight_Wrist_FingerAdduction+
+           UlnarMotorLeft_Wrist_FingerAdduction+
+           ExternalPoplitealSciaticMotorRight_Foot_DorsalisPedis+
+           ExternalPoplitealSciaticMotorLeft_Foot_DorsalisPedis+
+           InternalPoplitealSciaticMotorRight_Ankle_CFPI+
+           InternalPoplitealSciaticMotorLeft_Ankle_CFPI) %>%
+  mutate(Sum_Sensitive_Scores=
+           RadialSensoryRight+
+           RadialSensoryLeft+
+           MedianSensoryRight+
+           MedianSensoryLeft+
+           UlnarSensoryRight+
+           UlnarSensoryLeft+
+           MusculocutaneousSensoryRight+
+           MusculocutaneousSensoryLeft+
+           SuralSensitifD+
+           SuralSensoryLeft) %>%
+  select(NISLL, FAP, Sum_Sensitive_Scores, Sum_Motor_Scores)
+
+
+df_target_vars_imputed <- attr_emg_input %>% select(Patient, Visite_date) %>%
+  bind_cols(df_target_vars_imputed) %>% ungroup()
+
+
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+
+names(df_target_vars_imputed)
+
+# List of variables to analyze
+target_vars <- c(
+  "Sum_Motor_Scores",
+  "Sum_Sensitive_Scores"
+)
+
+
+test <- df_target_vars_imputed %>% 
+  group_by(Patient) %>% mutate(Visite_date=row_number()) %>% filter(Visite_date<=10) 
+
+# Prep data: sequential visit index per patient
+test_base <- test %>%
+  select(Patient, Visite_date, NISLL, all_of(target_vars)) %>%
+  group_by(Patient) %>%
+  mutate(Visite_date = row_number()) %>%
+  ungroup()
+
+
+# Loop over each variable
+walk(target_vars, function(varname) {
+  
+  message("Processing: ", varname)
+  
+  # Expand: pair NISLL with all earlier values of current variable
+  expanded <- test_base %>%
+    rename(NISLL_time = Visite_date, NISLL_value = NISLL) %>%
+    inner_join(
+      test_base %>% select(Patient, Score_Time = Visite_date, score_value = all_of(varname)),
+      by = "Patient"
+    ) %>%
+    filter(Score_Time <= NISLL_time) %>%
+    mutate(lag = NISLL_time - Score_Time)
+  
+  # Compute correlation per lag with cor.test
+  cor_test_by_lag <- expanded %>%
+    group_by(lag) %>%
+    summarise(
+      result = list(cor.test(NISLL_value, score_value, use = "complete.obs")),
+      n = n(),
+      .groups = "drop"
+    ) %>%
+    mutate(tidy_result = map(result, broom::tidy)) %>%
+    unnest(tidy_result) %>%
+    select(lag, n, estimate, p.value, conf.low, conf.high)
+  
+  # Plot with CI and significance
+  plot <- cor_test_by_lag %>%
+    mutate(p.sig = ifelse(p.value <= 0.05, "Sig", "Not")) %>%
+    ggplot(aes(x = lag, y = estimate, colour = p.sig)) +
+    geom_ribbon(aes(x = lag, ymin = conf.low, ymax = conf.high),
+                inherit.aes = FALSE,
+                fill = "gray80", alpha = 0.4) +
+    geom_line(color = "gray") +
+    geom_point(size = 3, shape = 1, stroke = 3) +
+    scale_color_manual(values = c("Sig" = "#2D5675", "Not" = "#B03C25")) +
+    ggpubr::theme_pubclean() +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#2D5675") +
+    ylim(-1,1) +
+    labs(
+      title = paste("Correlation between NISLL and preceding(s)", varname),
+      x = "\n VISIT LAG \n (How many 6-month visits before was the EMG assessed?)",
+      y = "Correlation coefficient (r) \n",
+      colour = "Significance"
+    )
+  
+  # Save as 5x5 inch SVG
+  ggsave(filename = paste0("cor_lag_", varname, ".svg"),
+         plot = plot,
+         width = 7,
+         height = 7,
+         units = "in")
+})
+
+
+# --------
