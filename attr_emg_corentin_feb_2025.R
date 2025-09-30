@@ -4080,3 +4080,170 @@ all_fixed_effects$BH <- adjusted_pvalues_bh
 all_fixed_effects %>% filter(Term=="Visite_date")
 
 # -----------
+# FAP Posteriors cutoffs ----------
+
+
+df_target_vars_imputed <- fread( "../data/df_target_vars_imputed.txt")
+
+df_target_vars_imputed <- df_target_vars_imputed %>% select(-c(NISLL ,Score_Total ,Score_Hemi_Right , Score_UlnSPI))
+
+unique(df_target_vars_imputed$FAP)
+
+df_target_vars_imputed$FAP <- round(df_target_vars_imputed$FAP)
+
+df_target_vars_imputed <- df_target_vars_imputed %>% 
+  mutate(Sum_Motor_Scores=
+           MedianMotorRight_Wrist_ThumbAbduction+
+           MedianMotorLeft_Wrist_ThumbAbduction+
+           UlnarMotorRight_Wrist_FingerAdduction+
+           UlnarMotorLeft_Wrist_FingerAdduction+
+           ExternalPoplitealSciaticMotorRight_Foot_DorsalisPedis+
+           ExternalPoplitealSciaticMotorLeft_Foot_DorsalisPedis+
+           InternalPoplitealSciaticMotorRight_Ankle_CFPI+
+           InternalPoplitealSciaticMotorLeft_Ankle_CFPI) %>%
+  mutate(Sum_Sensitive_Scores=
+           RadialSensoryRight+
+           RadialSensoryLeft+
+           MedianSensoryRight+
+           MedianSensoryLeft+
+           UlnarSensoryRight+
+           UlnarSensoryLeft+
+           MusculocutaneousSensoryRight+
+           MusculocutaneousSensoryLeft+
+           SuralSensitifD+
+           SuralSensoryLeft) %>%
+  select(FAP, Sum_Sensitive_Scores, Sum_Motor_Scores)
+
+
+
+
+
+to_plot <- ggplot(df_target_vars_imputed, aes(x = Sum_Motor_Scores, fill = factor(FAP))) +
+  geom_density(aes(y = ..count..), alpha = 0.4, colour = NA, adjust = 1) +
+  labs(x = "\n Sum Motor Scores", y="Patient-visit density \n", fill = "FAP Score", title="\n Sum of EMG Motor Scores Distribution ~ FAP Score \n") +
+  scale_fill_manual(values=c("#E0CECE", "#BD5C5C", "#5CA3BD", "#204C7A")) +
+  scale_colour_manual(values=c("#E0CECE", "#BD5C5C", "#5CA3BD", "#204C7A")) +
+    theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "right") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 12, vjust = -0.5),
+        axis.title.y = element_text(size = 12, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) 
+
+
+ggsave(filename = "distributions.svg",
+         plot = to_plot,
+         width = 10,
+         height = 7,
+         units = "in")
+
+
+# Class priors (relative frequencies)
+priors <- table(df_target_vars_imputed$FAP) / nrow(df_target_vars_imputed)
+
+# Intersection with priors
+intersection_points_priors <- function(mu1, sigma1, pi1, mu2, sigma2, pi2) {
+  a <- 1/(2*sigma1^2) - 1/(2*sigma2^2)
+  b <- mu2/(sigma2^2) - mu1/(sigma1^2)
+  c <- mu1^2/(2*sigma1^2) - mu2^2/(2*sigma2^2) - log((sigma2*pi1)/(sigma1*pi2))
+  roots <- polyroot(c(c, b, a))
+  roots <- Re(roots[abs(Im(roots)) < 1e-6])
+  sort(roots)
+}
+
+# Compute probability-aware cutoffs
+cutoffs_prob <- c()
+
+for (i in 1:(length(fap_levels) - 1)) {
+  mu1 <- fap_distributions[[as.character(fap_levels[i])]]$estimate["mean"]
+  sigma1 <- fap_distributions[[as.character(fap_levels[i])]]$estimate["sd"]
+  pi1 <- priors[as.character(fap_levels[i])]
+  
+  mu2 <- fap_distributions[[as.character(fap_levels[i+1])]]$estimate["mean"]
+  sigma2 <- fap_distributions[[as.character(fap_levels[i+1])]]$estimate["sd"]
+  pi2 <- priors[as.character(fap_levels[i+1])]
+  
+  inter <- intersection_points_priors(mu1, sigma1, pi1, mu2, sigma2, pi2)
+  inter_selected <- inter[inter > min(mu1, mu2) & inter < max(mu1, mu2)]
+  
+  if (length(inter_selected) == 0) {
+    inter_selected <- mean(c(mu1, mu2)) # fallback
+  }
+  
+  cutoffs_prob[i] <- inter_selected[1]
+}
+
+cutoffs_prob
+
+
+
+
+
+
+
+# Priors (class frequencies)
+priors <- table(df_target_vars_imputed$FAP) / nrow(df_target_vars_imputed)
+
+# Build grid of x values (motor score axis)
+x_vals <- seq(min(df_target_vars_imputed$Sum_Motor_Scores),
+              max(df_target_vars_imputed$Sum_Motor_Scores),
+              length.out = 500)
+
+# Compute posterior probabilities
+posterior_df <- do.call(rbind, lapply(x_vals, function(x) {
+  # Likelihoods for each FAP stage
+  likelihoods <- sapply(fap_levels, function(f) {
+    mu <- fap_distributions[[as.character(f)]]$estimate["mean"]
+    sd <- fap_distributions[[as.character(f)]]$estimate["sd"]
+    dnorm(x, mean = mu, sd = sd) * priors[as.character(f)]
+  })
+  probs <- likelihoods / sum(likelihoods)
+  
+  data.frame(x = x, FAP = fap_levels, Prob = probs)
+}))
+
+
+
+
+to_plot <- ggplot(posterior_df, aes(x = x, y = Prob,  fill = factor(FAP))) +
+  geom_area(alpha = 0.3, position = "identity") +
+  geom_vline(xintercept = cutoffs_prob, linetype = "dashed") +
+  labs(title = "Posterior probability of FAP Score by Sum of Motor EMG Score \n",
+       x = "\n Sum Motor Scores", y = "Posterior Probability \n", color = "FAP", fill = "FAP Score") +
+  scale_color_manual(values = c("#E0CECE", "#BD5C5C", "#5CA3BD", "#204C7A")) +
+  scale_fill_manual(values = c("#E0CECE", "#BD5C5C", "#5CA3BD", "#204C7A")) +
+    theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "right") +
+  theme(panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        axis.line = element_blank(),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size = 12, vjust = -0.5),
+        axis.title.y = element_text(size = 12, vjust = -0.5),
+        plot.margin = margin(5, 5, 5, 5, "pt")) 
+
+
+
+ggsave(filename = "posteriors.svg",
+         plot = to_plot,
+         width = 10,
+         height = 7,
+         units = "in")
+
+
+cutoffs_prob
+
+# ----------
